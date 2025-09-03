@@ -1,0 +1,124 @@
+# 二进制文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+scinote
+
+# 测试二进制文件
+*.test
+
+# 覆盖率文件
+*.out
+*.prof
+coverage.html
+coverage.txt
+profile.out
+
+# 构建目录
+build/
+dist/
+bin/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# 日志文件
+*.log
+logs/
+
+# 配置文件（生产环境）
+.env
+.env.local
+.env.production
+.env.staging
+config.toml.local
+config.yaml.local
+config.json.local
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 依赖目录
+vendor/
+
+# Go工作区文件
+go.work
+go.work.sum
+
+# Go模块缓存
+go.sum.backup
+
+# 测试文件
+test_*.txt
+test_*.json
+test_*.xml
+downloaded_*
+
+# OSS相关敏感文件
+oss_config_*.json
+*.key
+*.pem
+*.crt
+
+# 上传文件目录
+uploads/
+files/
+
+# 缓存文件
+*.cache
+cache/
+
+# 性能分析文件
+*.pprof
+cpu.prof
+mem.prof
+
+# Docker相关
+.dockerignore
+docker-compose.override.yml
+
+# 备份文件
+*.bak
+*.backup
+*.orig
+
+# 编辑器临时文件
+.#*
+#*#
+
+# 系统生成的文件
+*.pid
+*.seed
+*.pid.lock
+
+# 调试文件
+debug
+__debug_bin
+
+# Air热重载工具
+.air.toml
+tmp/

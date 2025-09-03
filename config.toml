@@ -1,0 +1,30 @@
+[server]
+port = 8080
+mode = "debug"
+read_timeout = 30
+write_timeout = 30
+
+[database]
+driver = "sqlite"
+dsn = "scinote.db"
+max_idle_conns = 10
+max_open_conns = 100
+conn_max_lifetime = 3600
+
+[log]
+level = "info"
+format = "json"
+output = "stdout"
+
+[file]
+storage_path = "./data/files"
+max_file_size = 104857600  # 100MB in bytes
+allowed_extensions = ["*"]
+
+[cors]
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+allowed_headers = ["*"]
+exposed_headers = ["Content-Length"]
+allow_credentials = true
+max_age = 86400
