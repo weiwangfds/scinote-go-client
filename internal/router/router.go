@@ -10,7 +10,9 @@ import (
 	"github.com/weiwangfds/scinote/internal/handler"
 	"github.com/weiwangfds/scinote/internal/middleware"
 	fileservice "github.com/weiwangfds/scinote/internal/service/file"
+	noteservice "github.com/weiwangfds/scinote/internal/service/note"
 	ossservice "github.com/weiwangfds/scinote/internal/service/oss"
+	tagservice "github.com/weiwangfds/scinote/internal/service/tag"
 	"gorm.io/gorm"
 )
 
@@ -34,9 +36,17 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 	// 设置OSS同步服务到文件服务中
 	fileService.SetOSSSyncService(ossSyncService)
 
+	// 初始化笔记服务
+	noteService := noteservice.NewNoteService(db, fileService)
+
+	// 初始化标签服务
+	tagService := tagservice.NewTagService(db)
+
 	// 初始化处理器
 	ossHandler := handler.NewOSSHandler(ossConfigService, ossSyncService)
 	fileHandler := handler.NewFileHandler(fileService)
+	noteHandler := handler.NewNoteHandler(noteService)
+	tagHandler := handler.NewTagHandler(tagService)
 
 	// 使用中间件
 	engine.Use(gin.Recovery())
@@ -115,13 +125,13 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 			oss.PUT("/configs/:id/toggle", ossHandler.ToggleOSSConfig)
 
 			// OSS同步相关接口
-		oss.POST("/sync/all", ossHandler.SyncAllFromOSS)
-		oss.GET("/sync/scan", ossHandler.ScanAndCompareFiles)
-		oss.GET("/sync/logs", ossHandler.GetSyncLogs)
-		oss.GET("/sync/status/:fileID", ossHandler.GetFileSyncStatus)
-		oss.POST("/sync/retry/:logID", ossHandler.RetryFailedSync)
-		oss.POST("/sync/file/:fileID", ossHandler.SyncFileToOSS)
-		oss.POST("/sync/batch", ossHandler.BatchSyncToOSS)
+			oss.POST("/sync/all", ossHandler.SyncAllFromOSS)
+			oss.GET("/sync/scan", ossHandler.ScanAndCompareFiles)
+			oss.GET("/sync/logs", ossHandler.GetSyncLogs)
+			oss.GET("/sync/status/:fileID", ossHandler.GetFileSyncStatus)
+			oss.POST("/sync/retry/:logID", ossHandler.RetryFailedSync)
+			oss.POST("/sync/file/:fileID", ossHandler.SyncFileToOSS)
+			oss.POST("/sync/batch", ossHandler.BatchSyncToOSS)
 		}
 
 		// 文件管理接口
@@ -136,6 +146,54 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 			files.GET("/:id/download", fileHandler.DownloadFile)
 			files.PUT("/:id", fileHandler.UpdateFile)
 			files.DELETE("/:id", fileHandler.DeleteFile)
+		}
+
+		// 笔记管理接口
+		notes := api.Group("/notes")
+		{
+			// 笔记基础CRUD操作
+			notes.POST("", noteHandler.CreateNote)
+			notes.GET("/:id", noteHandler.GetNote)
+			notes.PUT("/:id", noteHandler.UpdateNote)
+			notes.DELETE("/:id", noteHandler.DeleteNote)
+
+			// 笔记层级结构操作
+			notes.GET("/children", noteHandler.GetNoteChildren)     // 获取根笔记
+			notes.GET("/:id/children", noteHandler.GetNoteChildren) // 获取子笔记
+			notes.GET("/tree", noteHandler.GetNoteTree)             // 获取笔记树
+
+			// 笔记移动操作
+			notes.POST("/:id/move", noteHandler.MoveNote)          // 移动单个笔记
+			notes.POST("/batch-move", noteHandler.BatchMoveNotes)  // 批量移动笔记
+			notes.POST("/:id/move-tree", noteHandler.MoveNoteTree) // 移动笔记树
+
+			// 笔记搜索
+			notes.GET("/search", noteHandler.SearchNotes)
+
+			// 笔记标签管理
+			notes.POST("/:id/tags", noteHandler.AddNoteTag)              // 添加标签
+			notes.DELETE("/:id/tags/:tag_id", noteHandler.RemoveNoteTag) // 移除标签
+
+			// 笔记扩展属性管理
+			notes.POST("/:id/properties", noteHandler.SetNoteProperty)  // 设置属性
+			notes.GET("/:id/properties", noteHandler.GetNoteProperties) // 获取属性
+		}
+
+		// 标签管理接口
+		tags := api.Group("/tags")
+		{
+			// 标签基础CRUD操作
+			tags.POST("", tagHandler.CreateTag)                    // 创建标签
+			tags.GET("", tagHandler.GetAllTags)                  // 获取标签列表
+			tags.GET("/:id", tagHandler.GetTag)                  // 获取标签详情
+			tags.PUT("/:id", tagHandler.UpdateTag)               // 更新标签
+			tags.DELETE("/:id", tagHandler.DeleteTag)            // 删除标签
+
+			// 标签搜索和统计
+			tags.GET("/search", tagHandler.SearchTags)           // 搜索标签
+			tags.GET("/popular", tagHandler.GetPopularTags)      // 获取热门标签
+			tags.POST("/batch", tagHandler.BatchCreateTags)      // 批量创建标签
+			tags.GET("/:id/stats", tagHandler.GetTagUsageStats)  // 获取标签使用统计
 		}
 	}
 

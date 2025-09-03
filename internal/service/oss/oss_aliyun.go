@@ -17,8 +17,8 @@ import (
 // 实现了OSSProvider接口，提供阿里云对象存储服务的完整功能
 // 包括文件上传、下载、删除、列表查询等操作
 type AliyunOSSProvider struct {
-	client *oss.Client         // 阿里云OSS客户端实例
-	bucket *oss.Bucket         // OSS存储桶实例
+	client *oss.Client        // 阿里云OSS客户端实例
+	bucket *oss.Bucket        // OSS存储桶实例
 	config *database.OSSConfig // OSS配置信息
 }
 
@@ -26,14 +26,13 @@ type AliyunOSSProvider struct {
 // 根据配置信息初始化阿里云OSS客户端和存储桶连接
 // 参数:
 //   - config: OSS配置信息，包含访问密钥、区域、存储桶等
-//
 // 返回:
 //   - *AliyunOSSProvider: 初始化完成的阿里云OSS提供商实例
 //   - error: 初始化过程中的错误信息
 func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error) {
-	log.Printf("Initializing Aliyun OSS provider with config: %s (Region: %s, Bucket: %s)",
+	log.Printf("Initializing Aliyun OSS provider with config: %s (Region: %s, Bucket: %s)", 
 		config.Name, config.Region, config.Bucket)
-
+	
 	// 构建endpoint
 	endpoint := config.Endpoint
 	if endpoint == "" {
@@ -66,7 +65,7 @@ func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error
 		bucket: bucket,
 		config: config,
 	}
-
+	
 	log.Printf("Aliyun OSS provider initialized successfully for config: %s", config.Name)
 	return provider, nil
 }
@@ -77,12 +76,11 @@ func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error
 //   - objectKey: OSS中的对象键（文件路径）
 //   - reader: 文件数据流
 //   - contentType: 文件的MIME类型
-//
 // 返回:
 //   - error: 上传过程中的错误信息
 func (p *AliyunOSSProvider) UploadFile(objectKey string, reader io.Reader, contentType string) error {
 	log.Printf("Starting file upload to Aliyun OSS: %s (ContentType: %s)", objectKey, contentType)
-
+	
 	options := []oss.Option{}
 	if contentType != "" {
 		options = append(options, oss.ContentType(contentType))
@@ -104,13 +102,12 @@ func (p *AliyunOSSProvider) UploadFile(objectKey string, reader io.Reader, conte
 // 获取指定对象键的文件数据流
 // 参数:
 //   - objectKey: OSS中的对象键（文件路径）
-//
 // 返回:
 //   - io.ReadCloser: 文件数据流，使用完毕后需要关闭
 //   - error: 下载过程中的错误信息
 func (p *AliyunOSSProvider) DownloadFile(objectKey string) (io.ReadCloser, error) {
 	log.Printf("Starting file download from Aliyun OSS: %s", objectKey)
-
+	
 	body, err := p.bucket.GetObject(objectKey)
 	if err != nil {
 		log.Printf("Failed to download file %s from Aliyun OSS: %v", objectKey, err)
@@ -125,12 +122,11 @@ func (p *AliyunOSSProvider) DownloadFile(objectKey string) (io.ReadCloser, error
 // 从OSS存储桶中删除指定的对象
 // 参数:
 //   - objectKey: OSS中的对象键（文件路径）
-//
 // 返回:
 //   - error: 删除过程中的错误信息
 func (p *AliyunOSSProvider) DeleteFile(objectKey string) error {
 	log.Printf("Starting file deletion from Aliyun OSS: %s", objectKey)
-
+	
 	err := p.bucket.DeleteObject(objectKey)
 	if err != nil {
 		log.Printf("Failed to delete file %s from Aliyun OSS: %v", objectKey, err)
@@ -145,13 +141,12 @@ func (p *AliyunOSSProvider) DeleteFile(objectKey string) error {
 // 检查指定对象键的文件是否存在于OSS存储桶中
 // 参数:
 //   - objectKey: OSS中的对象键（文件路径）
-//
 // 返回:
 //   - bool: 文件是否存在
 //   - error: 检查过程中的错误信息
 func (p *AliyunOSSProvider) FileExists(objectKey string) (bool, error) {
 	log.Printf("Checking file existence in Aliyun OSS: %s", objectKey)
-
+	
 	exists, err := p.bucket.IsObjectExist(objectKey)
 	if err != nil {
 		log.Printf("Failed to check file existence %s in Aliyun OSS: %v", objectKey, err)
@@ -166,13 +161,12 @@ func (p *AliyunOSSProvider) FileExists(objectKey string) (bool, error) {
 // 获取指定对象键的详细文件元数据信息
 // 参数:
 //   - objectKey: OSS中的对象键（文件路径）
-//
 // 返回:
 //   - *FileInfo: 文件信息结构体，包含大小、修改时间等
 //   - error: 获取过程中的错误信息
 func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 	log.Printf("Getting file info from Aliyun OSS: %s", objectKey)
-
+	
 	meta, err := p.bucket.GetObjectMeta(objectKey)
 	if err != nil {
 		log.Printf("Failed to get file info %s from Aliyun OSS: %v", objectKey, err)
@@ -193,8 +187,8 @@ func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 		ETag:         strings.Trim(meta.Get("Etag"), "\""),
 		ContentType:  meta.Get("Content-Type"),
 	}
-
-	log.Printf("Successfully retrieved file info for %s: Size=%d, ContentType=%s, LastModified=%s",
+	
+	log.Printf("Successfully retrieved file info for %s: Size=%d, ContentType=%s, LastModified=%s", 
 		objectKey, fileInfo.Size, fileInfo.ContentType, fileInfo.LastModified)
 	return fileInfo, nil
 }
@@ -204,13 +198,12 @@ func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 // 参数:
 //   - prefix: 文件前缀过滤条件
 //   - maxKeys: 最大返回文件数量
-//
 // 返回:
 //   - []FileInfo: 文件信息列表
 //   - error: 列表操作中的错误信息
 func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, error) {
 	log.Printf("Listing files from Aliyun OSS with prefix: %s, maxKeys: %d", prefix, maxKeys)
-
+	
 	options := []oss.Option{
 		oss.Prefix(prefix),
 		oss.MaxKeys(maxKeys),
@@ -223,7 +216,7 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 	}
 
 	log.Printf("Found %d objects in Aliyun OSS with prefix: %s", len(lsRes.Objects), prefix)
-
+	
 	var files []FileInfo
 	for _, object := range lsRes.Objects {
 		fileInfo := FileInfo{
@@ -234,7 +227,7 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 			ContentType:  object.Type,
 		}
 		files = append(files, fileInfo)
-		log.Printf("Added file to list: %s (Size: %d, LastModified: %s)",
+		log.Printf("Added file to list: %s (Size: %d, LastModified: %s)", 
 			fileInfo.Key, fileInfo.Size, fileInfo.LastModified)
 	}
 
@@ -248,7 +241,7 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 //   - error: 连接测试中的错误信息，nil表示连接正常
 func (p *AliyunOSSProvider) TestConnection() error {
 	log.Printf("Testing Aliyun OSS connection for bucket: %s", p.config.Bucket)
-
+	
 	// 尝试列出存储桶信息
 	bucketInfo, err := p.client.GetBucketInfo(p.config.Bucket)
 	if err != nil {
@@ -256,7 +249,7 @@ func (p *AliyunOSSProvider) TestConnection() error {
 		return fmt.Errorf("failed to test aliyun oss connection: %w", err)
 	}
 
-	log.Printf("Aliyun OSS connection test successful for bucket: %s (CreationDate: %v, Location: %s)",
+	log.Printf("Aliyun OSS connection test successful for bucket: %s (CreationDate: %v, Location: %s)", 
 		p.config.Bucket, bucketInfo.BucketInfo.CreationDate, bucketInfo.BucketInfo.Location)
 	return nil
 }

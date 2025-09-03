@@ -16,7 +16,9 @@ func Init(cfg config.DatabaseConfig) (*gorm.DB, error) {
 
 	switch cfg.Driver {
 	case "sqlite":
-		dialector = sqlite.Open(cfg.DSN)
+		// 启用WAL模式和其他SQLite优化选项
+		dsn := cfg.DSN + "?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=1000&_timeout=5000&_busy_timeout=5000"
+		dialector = sqlite.Open(dsn)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", cfg.Driver)
 	}
@@ -34,8 +36,14 @@ func Init(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
 
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	// 对于SQLite，限制并发连接数以避免锁定问题
+	if cfg.Driver == "sqlite" {
+		sqlDB.SetMaxIdleConns(1)
+		sqlDB.SetMaxOpenConns(1)
+	} else {
+		sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+		sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	}
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 
 	// 自动迁移表结构
@@ -52,5 +60,9 @@ func autoMigrate(db *gorm.DB) error {
 		&FileMetadata{},
 		&OSSConfig{},
 		&SyncLog{},
+		&Note{},
+		&Tag{},
+		&NoteTag{},
+		&NoteProperty{},
 	)
 }

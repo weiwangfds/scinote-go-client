@@ -253,13 +253,15 @@ func (s *fileWatcherService) databaseWatcher(ctx context.Context) {
 
 // checkFileChanges 检查指定时间以来的文件变化
 // 查询数据库中的文件变化并将符合条件的文件加入同步队列
+// 当没有OSS配置时，会优雅跳过同步，不影响其他功能
 func (s *fileWatcherService) checkFileChanges(since time.Time) {
 	log.Printf("Checking file changes since: %v", since)
 
 	// 获取激活的OSS配置
 	ossConfig, err := s.ossConfigService.GetActiveOSSConfig()
 	if err != nil {
-		log.Printf("No active OSS config found, skipping file change check: %v", err)
+		// OSS配置不存在时，仅记录日志但不影响其他功能
+		log.Printf("No active OSS config found, skipping OSS sync (this is normal if OSS is not configured): %v", err)
 		return
 	}
 

@@ -86,14 +86,10 @@ type OSSProviderFactory struct{}
 // CreateProvider 根据配置创建OSS提供商实例
 // 功能: 工厂方法，根据配置中的提供商类型创建相应的OSS提供商实例
 // 参数:
-//
-//	config: OSS配置信息，包含提供商类型、访问密钥、区域等
-//
+//   config: OSS配置信息，包含提供商类型、访问密钥、区域等
 // 返回:
-//
-//	OSSProvider: OSS提供商接口实例
-//	error: 创建过程中的错误信息
-//
+//   OSSProvider: OSS提供商接口实例
+//   error: 创建过程中的错误信息
 // 支持的提供商:
 //   - "aliyun": 阿里云对象存储OSS
 //   - "tencent": 腾讯云对象存储COS

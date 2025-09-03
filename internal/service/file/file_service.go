@@ -132,9 +132,9 @@ type FileService interface {
 // fileService 文件服务实现
 // 实现FileService接口，提供完整的文件管理功能
 type fileService struct {
-	db             *gorm.DB                    // 数据库连接
-	config         config.FileConfig           // 文件配置信息
-	ossSyncService OSSyncService   // OSS同步服务（可选）
+	db             *gorm.DB          // 数据库连接
+	config         config.FileConfig // 文件配置信息
+	ossSyncService OSSyncService     // OSS同步服务（可选）
 }
 
 // NewFileService 创建文件服务实例
@@ -662,7 +662,7 @@ func (s *fileService) moveFile(src, dst string) error {
 // 用于在文件删除时同步删除云端文件
 // OSSyncService 定义了OSS同步服务的接口
 type OSSyncService interface {
-    // 在这里定义OSS同步服务需要的方法
+	// 在这里定义OSS同步服务需要的方法
 }
 
 func (s *fileService) SetOSSSyncService(syncService OSSyncService) {
