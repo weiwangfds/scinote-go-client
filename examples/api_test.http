@@ -1,0 +1,76 @@
+### 添加阿里云OSS配置
+POST http://localhost:8080/api/v1/oss/configs
+Content-Type: application/json
+
+{
+    "name": "Aliyun OSS Test",
+    "provider": "aliyun",
+    "access_key": "YOUR_ALIYUN_ACCESS_KEY",
+    "secret_key": "YOUR_ALIYUN_SECRET_KEY",
+    "bucket": "your-bucket-name",
+    "endpoint": "oss-cn-beijing.aliyuncs.com",
+    "region": "cn-beijing",
+    "path_prefix": "",
+    "storage_type": "standard"
+}
+
+### 获取所有OSS配置
+GET http://localhost:8080/api/v1/oss/configs
+
+### 激活OSS配置（替换{configId}为实际ID）
+PUT http://localhost:8080/api/v1/oss/configs/{configId}/activate
+
+### 获取单个OSS配置
+GET http://localhost:8080/api/v1/oss/configs/{configId}
+
+### 更新OSS配置
+PUT http://localhost:8080/api/v1/oss/configs/{configId}
+Content-Type: application/json
+
+{
+    "name": "Updated Aliyun OSS",
+    "provider": "aliyun",
+    "access_key": "YOUR_ALIYUN_ACCESS_KEY",
+    "secret_key": "YOUR_ALIYUN_SECRET_KEY",
+    "bucket": "your-bucket-name",
+    "endpoint": "oss-cn-beijing.aliyuncs.com",
+    "region": "cn-beijing",
+    "path_prefix": "uploads/",
+    "storage_type": "standard"
+}
+
+### 删除OSS配置
+DELETE http://localhost:8080/api/v1/oss/configs/{configId}
+
+### 测试OSS连接
+POST http://localhost:8080/api/v1/oss/test-connection
+
+### 上传文件
+POST http://localhost:8080/api/v1/files/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+This is a test file content.
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 下载文件
+GET http://localhost:8080/api/v1/files/download/test.txt
+
+### 获取文件列表
+GET http://localhost:8080/api/v1/files
+
+### 删除文件
+DELETE http://localhost:8080/api/v1/files/test.txt
+
+### 同步文件
+POST http://localhost:8080/api/v1/files/sync
+Content-Type: application/json
+
+{
+    "local_path": "/path/to/local/directory",
+    "remote_path": "remote/directory/",
+    "sync_type": "upload"
+}
