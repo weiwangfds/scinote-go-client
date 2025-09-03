@@ -475,7 +475,7 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 		FileSize:    fileMetadata.FileSize,
 	}
 
-	if err := s.db.Create(syncLog).Error; err != nil {
+	if dbErr := s.db.Create(syncLog).Error; dbErr != nil {
 		log.Printf("Failed to create sync log for file %s: %v", fileMetadata.FileName, err)
 		return
 	}
@@ -487,7 +487,7 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 
 	// 检查本地文件是否存在
 	log.Printf("Checking local file existence: %s", fileMetadata.StoragePath)
-	if _, err := os.Stat(fileMetadata.StoragePath); os.IsNotExist(err) {
+	if _, osErr := os.Stat(fileMetadata.StoragePath); os.IsNotExist(osErr) {
 		log.Printf("Local file not found: %s, scheduling retry", fileMetadata.StoragePath)
 		// 本地文件不存在，安排后续重试
 		s.updateSyncLogError(syncLog, fmt.Sprintf("Local file not found: %s", fileMetadata.StoragePath))
@@ -570,19 +570,6 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 	log.Printf("File synced successfully to OSS: %s -> %s (Duration: %dms, Size: %d bytes)", 
 		fileMetadata.FileName, ossPath, duration, fileMetadata.FileSize)
 }
-
-// isRetryableError 判断错误是否可重试
-func isRetryableError(err error) bool {
-	// 这里简单判断，实际应该根据具体的错误类型来判断
-	// 网络错误、连接超时等可以重试
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "connection") ||
-		strings.Contains(errMsg, "timeout") ||
-		strings.Contains(errMsg, "network") ||
-		strings.Contains(errMsg, "unreachable") ||
-		strings.Contains(errMsg, "EOF")
-}
-
 // generateOSSPath 生成OSS路径
 func (s *fileWatcherService) generateOSSPath(fileMetadata *database.FileMetadata, ossConfig *database.OSSConfig) string {
 	var ossPath string

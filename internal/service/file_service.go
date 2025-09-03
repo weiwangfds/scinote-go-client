@@ -280,7 +280,7 @@ func (s *fileService) GetFileContent(fileID string) (io.ReadCloser, error) {
 	}
 
 	// 检查文件是否存在
-	if _, err := os.Stat(metadata.StoragePath); os.IsNotExist(err) {
+	if _, osErr := os.Stat(metadata.StoragePath); os.IsNotExist(osErr) {
 		return nil, fmt.Errorf("file not found on disk: %s", metadata.StoragePath)
 	}
 
@@ -354,18 +354,18 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 	// 备份原文件
 	backupPath := metadata.StoragePath + ".backup"
 	log.Printf("Creating backup of original file: %s -> %s", metadata.StoragePath, backupPath)
-	if err := s.moveFile(metadata.StoragePath, backupPath); err != nil {
-		log.Printf("Failed to backup original file %s: %v", metadata.StoragePath, err)
-		return nil, fmt.Errorf("failed to backup original file: %w", err)
+	if osErr := s.moveFile(metadata.StoragePath, backupPath); osErr != nil {
+		log.Printf("Failed to backup original file %s: %v", metadata.StoragePath, osErr)
+		return nil, fmt.Errorf("failed to backup original file: %w", osErr)
 	}
 
 	// 将新文件移动到原位置
 	log.Printf("Moving new file to original location: %s -> %s", tempFile.Name(), metadata.StoragePath)
-	if err := s.moveFile(tempFile.Name(), metadata.StoragePath); err != nil {
+	if osErr := s.moveFile(tempFile.Name(), metadata.StoragePath); osErr != nil {
 		// 恢复备份文件
-		log.Printf("Failed to move new file, restoring backup: %v", err)
+		log.Printf("Failed to move new file, restoring backup: %v", osErr)
 		s.moveFile(backupPath, metadata.StoragePath)
-		return nil, fmt.Errorf("failed to move new file: %w", err)
+		return nil, fmt.Errorf("failed to move new file: %w", osErr)
 	}
 
 	// 更新数据库记录
@@ -377,11 +377,11 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 	}
 
 	log.Printf("Updating file metadata in database for file: %s", fileID)
-	if err := s.db.Model(metadata).Updates(updates).Error; err != nil {
+	if osErr := s.db.Model(metadata).Updates(updates).Error; osErr != nil {
 		// 恢复备份文件
-		log.Printf("Failed to update file metadata for %s, restoring backup: %v", fileID, err)
+		log.Printf("Failed to update file metadata for %s, restoring backup: %v", fileID, osErr)
 		s.moveFile(backupPath, metadata.StoragePath)
-		return nil, fmt.Errorf("failed to update file metadata: %w", err)
+		return nil, fmt.Errorf("failed to update file metadata: %w", osErr)
 	}
 
 	// 删除备份文件
@@ -425,12 +425,12 @@ func (s *fileService) DeleteFile(fileID string) error {
 			ossConfig, err := s.ossSyncService.(*ossSyncService).getActiveOSSConfig()
 			if err == nil {
 				factory := &OSSProviderFactory{}
-				provider, err := factory.CreateProvider(ossConfig)
-				if err == nil {
+				provider, osErr := factory.CreateProvider(ossConfig)
+				if osErr == nil {
 					// 异步删除OSS文件，不阻塞主流程
 					go func() {
-						if err := provider.DeleteFile(syncLog.OSSPath); err != nil {
-							log.Printf("Failed to delete file from OSS %s: %v", syncLog.OSSPath, err)
+						if osErr := provider.DeleteFile(syncLog.OSSPath); osErr != nil {
+							log.Printf("Failed to delete file from OSS %s: %v", syncLog.OSSPath, osErr)
 						} else {
 							log.Printf("Successfully deleted file from OSS: %s", syncLog.OSSPath)
 						}

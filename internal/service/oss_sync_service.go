@@ -206,8 +206,8 @@ func (s *ossSyncService) SyncFromOSS(fileID string, ossPath string) error {
 	// 检查是否已经在同步中
 	log.Println("[OSS同步服务] 检查是否存在进行中的下载任务")
 	var existingLog database.SyncLog
-	if err := s.db.Where("file_id = ? AND oss_config_id = ? AND sync_type = ? AND status = ?",
-		fileID, ossConfig.ID, "download", "pending").First(&existingLog).Error; err == nil {
+	if dbErr := s.db.Where("file_id = ? AND oss_config_id = ? AND sync_type = ? AND status = ?",
+		fileID, ossConfig.ID, "download", "pending").First(&existingLog).Error; dbErr == nil {
 		log.Printf("[OSS同步服务] 文件正在下载中, 同步日志ID: %d", existingLog.ID)
 		return ErrSyncInProgress
 	}
@@ -298,7 +298,7 @@ func (s *ossSyncService) BatchSyncToOSS(fileIDs []string) error {
 	if len(errors) > 0 {
 		errorMsg := fmt.Sprintf("batch sync errors: %s", strings.Join(errors, "; "))
 		log.Printf("[OSS同步服务] 批量同步存在错误: %s", errorMsg)
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("[OSS同步服务] 批量同步存在错误: %s", errorMsg)
 	}
 
 	log.Println("[OSS同步服务] 批量同步全部成功")
@@ -394,7 +394,7 @@ func (s *ossSyncService) SyncAllFromOSS() error {
 	if len(syncErrors) > 0 {
 		errorMsg := fmt.Sprintf("some files failed to start sync: %s", strings.Join(syncErrors, "; "))
 		log.Printf("[OSS同步服务] 部分文件同步启动失败: %s", errorMsg)
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("[OSS同步服务] 部分文件同步启动失败: %s", errorMsg)
 	}
 
 	log.Println("[OSS同步服务] 全量同步任务全部启动成功")
