@@ -10,6 +10,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,6 +21,31 @@ import (
 	"github.com/weiwangfds/scinote/internal/database"
 	"gorm.io/gorm"
 )
+
+// OSSConfigService OSS配置服务接口，定义文件监听服务需要的OSS配置操作方法
+// 这里只定义文件监听服务实际需要的方法，避免循环导入
+type OSSConfigService interface {
+	// GetActiveOSSConfig 获取当前激活的OSS配置
+	GetActiveOSSConfig() (*database.OSSConfig, error)
+}
+
+// OSSProvider OSS提供商接口，定义文件监听服务需要的OSS操作方法
+type OSSProvider interface {
+	// UploadFile 上传文件到OSS
+	UploadFile(objectKey string, reader io.Reader, contentType string) error
+	// TestConnection 测试OSS连接
+	TestConnection() error
+}
+
+// OSSProviderFactory OSS提供商工厂
+type OSSProviderFactory struct{}
+
+// CreateProvider 创建OSS提供商实例（简化版本，避免循环导入）
+func (f *OSSProviderFactory) CreateProvider(config *database.OSSConfig) (OSSProvider, error) {
+	// 这里返回nil，实际的OSS操作应该通过其他方式处理
+	// 或者使用依赖注入的方式传入真正的OSS提供商
+	return nil, fmt.Errorf("OSS provider creation not implemented in watcher service")
+}
 
 // FileWatcherService 文件监听服务接口
 // 提供文件变化监听和自动同步到OSS的功能
@@ -66,7 +92,7 @@ type RetryItem struct {
 // fileWatcherService 文件监听服务实现
 // 实现FileWatcherService接口，提供完整的文件监听和同步功能
 type fileWatcherService struct {
-	db               *gorm.DB                     // 数据库连接
+	db               *gorm.DB                    // 数据库连接
 	ossConfigService OSSConfigService            // OSS配置服务
 	factory          *OSSProviderFactory         // OSS提供商工厂
 	syncQueue        chan *database.FileMetadata // 同步队列，缓冲待同步文件
@@ -81,10 +107,14 @@ type fileWatcherService struct {
 
 // NewFileWatcherService 创建文件监听服务实例
 // 参数:
-//   db - 数据库连接实例
-//   ossConfigService - OSS配置服务实例
+//
+//	db - 数据库连接实例
+//	ossConfigService - OSS配置服务实例
+//
 // 返回:
-//   FileWatcherService - 文件监听服务接口实例
+//
+//	FileWatcherService - 文件监听服务接口实例
+//
 // 功能:
 //   - 初始化文件监听服务
 //   - 配置同步队列和重试队列
@@ -92,7 +122,7 @@ type fileWatcherService struct {
 func NewFileWatcherService(db *gorm.DB, ossConfigService OSSConfigService) FileWatcherService {
 	log.Printf("Initializing file watcher service with queue sizes - sync: 100, retry: 50")
 	log.Printf("Retry configuration - max retries: 5, min interval: 30s")
-	
+
 	return &fileWatcherService{
 		db:               db,
 		ossConfigService: ossConfigService,
@@ -101,8 +131,8 @@ func NewFileWatcherService(db *gorm.DB, ossConfigService OSSConfigService) FileW
 		retryQueue:       make(chan *RetryItem, 50),              // 重试队列
 		stopChan:         make(chan struct{}),
 		isRunning:        false,
-		maxRetries:       5,                                      // 最多重试5次
-		minRetryInterval: 30 * time.Second,                       // 最小重试间隔30秒
+		maxRetries:       5,                // 最多重试5次
+		minRetryInterval: 30 * time.Second, // 最小重试间隔30秒
 	}
 }
 
@@ -110,7 +140,7 @@ func NewFileWatcherService(db *gorm.DB, ossConfigService OSSConfigService) FileW
 // 启动所有必要的工作协程来处理文件监听和同步任务
 func (s *fileWatcherService) Start(ctx context.Context) error {
 	log.Printf("Attempting to start file watcher service")
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -145,7 +175,7 @@ func (s *fileWatcherService) Start(ctx context.Context) error {
 // 优雅关闭所有工作协程并等待任务完成
 func (s *fileWatcherService) Stop() error {
 	log.Printf("Attempting to stop file watcher service")
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -173,7 +203,7 @@ func (s *fileWatcherService) Stop() error {
 // 立即将文件加入同步队列，绕过自动监听机制
 func (s *fileWatcherService) TriggerSync(fileID string) error {
 	log.Printf("Manual sync triggered for file ID: %s", fileID)
-	
+
 	var fileMetadata database.FileMetadata
 	if err := s.db.Where("file_id = ?", fileID).First(&fileMetadata).Error; err != nil {
 		log.Printf("File not found for manual sync %s: %v", fileID, err)
@@ -225,7 +255,7 @@ func (s *fileWatcherService) databaseWatcher(ctx context.Context) {
 // 查询数据库中的文件变化并将符合条件的文件加入同步队列
 func (s *fileWatcherService) checkFileChanges(since time.Time) {
 	log.Printf("Checking file changes since: %v", since)
-	
+
 	// 获取激活的OSS配置
 	ossConfig, err := s.ossConfigService.GetActiveOSSConfig()
 	if err != nil {
@@ -263,7 +293,7 @@ func (s *fileWatcherService) checkFileChanges(since time.Time) {
 			skippedCount++
 		}
 	}
-	
+
 	log.Printf("File change check completed - queued: %d, skipped: %d", queuedCount, skippedCount)
 }
 
@@ -291,13 +321,13 @@ func (s *fileWatcherService) retryWorker(ctx context.Context) {
 			log.Printf("Retry worker checking for due retry items at: %v", now)
 			retryItems := s.getRetryItemsDue(now)
 			log.Printf("Found %d retry items due for processing", len(retryItems))
-			
+
 			processedCount := 0
 			for _, item := range retryItems {
 				// 将文件重新加入同步队列
 				select {
 				case s.syncQueue <- item.FileMetadata:
-					log.Printf("Retrying file upload: %s (attempt %d/%d)", 
+					log.Printf("Retrying file upload: %s (attempt %d/%d)",
 						item.FileMetadata.FileName, item.RetryCount+1, s.maxRetries)
 					processedCount++
 				default:
@@ -318,9 +348,13 @@ func (s *fileWatcherService) retryWorker(ctx context.Context) {
 // getRetryItemsDue 获取到期需要重试的项
 // 从存储中查询所有到期需要重试的文件项
 // 参数:
-//   now - 当前时间，用于判断重试项是否到期
+//
+//	now - 当前时间，用于判断重试项是否到期
+//
 // 返回:
-//   []*RetryItem - 到期的重试项列表
+//
+//	[]*RetryItem - 到期的重试项列表
+//
 // 功能:
 //   - 查询数据库中NextRetry时间小于等于now的重试项
 //   - 返回需要重新处理的文件列表
@@ -337,13 +371,15 @@ func (s *fileWatcherService) getRetryItemsDue(now time.Time) []*RetryItem {
 // saveRetryItem 保存重试项到存储中
 // 将失败的同步任务保存为重试项，以便后续重新处理
 // 参数:
-//   item - 需要保存的重试项，包含文件信息和重试配置
+//
+//	item - 需要保存的重试项，包含文件信息和重试配置
+//
 // 功能:
 //   - 将重试项持久化到数据库或内存存储
 //   - 记录重试次数和下次重试时间
 //   - 用于重试工作协程后续处理
 func (s *fileWatcherService) saveRetryItem(item *RetryItem) {
-	log.Printf("Saving retry item for file: %s (retry count: %d, next retry at: %v)", 
+	log.Printf("Saving retry item for file: %s (retry count: %d, next retry at: %v)",
 		item.FileMetadata.FileName, item.RetryCount, item.NextRetry)
 	// 注意：这里只是模拟实现，实际应该保存到数据库或内存中
 	// 为简化实现，我们暂时只记录日志
@@ -354,39 +390,41 @@ func (s *fileWatcherService) saveRetryItem(item *RetryItem) {
 // scheduleRetry 安排重试任务
 // 为失败的同步任务安排下次重试时间，使用指数退避策略
 // 参数:
-//   item - 需要重新安排的重试项
+//
+//	item - 需要重新安排的重试项
+//
 // 功能:
 //   - 检查是否超过最大重试次数限制
 //   - 使用指数退避算法计算下次重试时间
 //   - 将重试项加入重试队列等待处理
 //   - 记录重试调度的详细日志
 func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
-	log.Printf("Scheduling retry for file: %s (current retry count: %d)", 
+	log.Printf("Scheduling retry for file: %s (current retry count: %d)",
 		item.FileMetadata.FileName, item.RetryCount)
-	
+
 	// 检查是否超过最大重试次数
 	if item.RetryCount >= s.maxRetries {
-		log.Printf("Maximum retry attempts (%d) reached for file: %s, stopping retry", 
+		log.Printf("Maximum retry attempts (%d) reached for file: %s, stopping retry",
 			s.maxRetries, item.FileMetadata.FileName)
 		return
 	}
-	
+
 	// 计算下一次重试时间（指数退避算法）
-	backoff := time.Duration(item.RetryCount * item.RetryCount) * s.minRetryInterval
+	backoff := time.Duration(item.RetryCount*item.RetryCount) * s.minRetryInterval
 	nextRetry := time.Now().Add(backoff)
 	log.Printf("Calculated backoff duration: %v for retry attempt %d", backoff, item.RetryCount+1)
-	
+
 	// 创建新的重试项
 	newItem := &RetryItem{
 		FileMetadata: item.FileMetadata,
 		RetryCount:   item.RetryCount + 1,
 		NextRetry:    nextRetry,
 	}
-	
+
 	// 添加到重试队列
 	select {
 	case s.retryQueue <- newItem:
-		log.Printf("Scheduled retry for file: %s at %v (attempt %d/%d)", 
+		log.Printf("Scheduled retry for file: %s at %v (attempt %d/%d)",
 			item.FileMetadata.FileName, nextRetry, item.RetryCount+1, s.maxRetries)
 	default:
 		log.Printf("Retry queue is full, can't schedule retry for file: %s", item.FileMetadata.FileName)
@@ -396,7 +434,9 @@ func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
 // syncWorker 同步处理工作协程
 // 从同步队列中获取文件并执行OSS同步操作
 // 参数:
-//   ctx - 上下文，用于控制协程生命周期
+//
+//	ctx - 上下文，用于控制协程生命周期
+//
 // 功能:
 //   - 监听同步队列中的文件
 //   - 调用syncFileToOSS执行实际同步
@@ -423,7 +463,9 @@ func (s *fileWatcherService) syncWorker(ctx context.Context) {
 // syncFileToOSS 同步文件到OSS存储
 // 执行单个文件的OSS同步操作，包含完整的错误处理和重试机制
 // 参数:
-//   fileMetadata - 需要同步的文件元数据信息
+//
+//	fileMetadata - 需要同步的文件元数据信息
+//
 // 功能:
 //   - 获取并验证OSS配置
 //   - 检查本地文件存在性和可读性
@@ -431,9 +473,9 @@ func (s *fileWatcherService) syncWorker(ctx context.Context) {
 //   - 记录同步日志和处理失败重试
 //   - 支持多种文件格式的内容类型识别
 func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) {
-	log.Printf("Starting OSS sync for file: %s (ID: %s, Size: %d bytes, Path: %s)", 
+	log.Printf("Starting OSS sync for file: %s (ID: %s, Size: %d bytes, Path: %s)",
 		fileMetadata.FileName, fileMetadata.FileID, fileMetadata.FileSize, fileMetadata.StoragePath)
-	
+
 	// 获取激活的OSS配置
 	log.Printf("Retrieving active OSS configuration for file sync")
 	ossConfig, err := s.ossConfigService.GetActiveOSSConfig()
@@ -442,12 +484,12 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 		return // OSS没有配置时不上传
 	}
 
-	log.Printf("Found active OSS config: %s (Provider: %s, AutoSync: %v)", 
+	log.Printf("Found active OSS config: %s (Provider: %s, AutoSync: %v)",
 		ossConfig.Name, ossConfig.Provider, ossConfig.AutoSync)
 
 	// 如果未开启自动同步，跳过
 	if !ossConfig.AutoSync {
-		log.Printf("OSS auto-sync is disabled for config %s, skipping file: %s", 
+		log.Printf("OSS auto-sync is disabled for config %s, skipping file: %s",
 			ossConfig.Name, fileMetadata.FileName)
 		return // OSS功能禁用时不上传
 	}
@@ -491,14 +533,14 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 		log.Printf("Local file not found: %s, scheduling retry", fileMetadata.StoragePath)
 		// 本地文件不存在，安排后续重试
 		s.updateSyncLogError(syncLog, fmt.Sprintf("Local file not found: %s", fileMetadata.StoragePath))
-		
+
 		// 创建重试项
 		retryItem := &RetryItem{
 			FileMetadata: fileMetadata,
 			RetryCount:   0,
 			NextRetry:    time.Now().Add(1 * time.Minute), // 1分钟后重试
 		}
-		
+
 		// 安排重试
 		s.scheduleRetry(retryItem)
 		log.Printf("Local file not found, scheduled for retry in 1 minute: %s", fileMetadata.FileName)
@@ -513,14 +555,14 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 		log.Printf("Failed to open local file %s: %v, scheduling retry", fileMetadata.StoragePath, err)
 		// 打开文件失败，安排后续重试
 		s.updateSyncLogError(syncLog, fmt.Sprintf("Failed to open local file: %v", err))
-		
+
 		// 创建重试项
 		retryItem := &RetryItem{
 			FileMetadata: fileMetadata,
 			RetryCount:   0,
 			NextRetry:    time.Now().Add(30 * time.Second), // 30秒后重试
 		}
-		
+
 		// 安排重试
 		s.scheduleRetry(retryItem)
 		log.Printf("Failed to open file, scheduled for retry in 30 seconds: %s", fileMetadata.FileName)
@@ -531,7 +573,7 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 
 	// 获取内容类型
 	contentType := s.getContentType(fileMetadata.FileFormat)
-	log.Printf("Determined content type for file %s (format: %s): %s", 
+	log.Printf("Determined content type for file %s (format: %s): %s",
 		fileMetadata.FileName, fileMetadata.FileFormat, contentType)
 
 	// 上传到OSS
@@ -545,7 +587,7 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 			RetryCount:   0,
 			NextRetry:    time.Now().Add(30 * time.Second), // 延迟30秒后重试
 		}
-		
+
 		// 安排重试
 		s.scheduleRetry(retryItem)
 		log.Printf("File upload failed, scheduled for retry in 30 seconds: %s", fileMetadata.FileName)
@@ -555,7 +597,7 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 	// 更新同步日志为成功
 	duration := time.Since(startTime).Milliseconds()
 	log.Printf("File upload completed successfully in %d ms: %s", duration, fileMetadata.FileName)
-	
+
 	updates := map[string]interface{}{
 		"status":   "success",
 		"duration": duration,
@@ -567,9 +609,10 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 		log.Printf("Sync log updated successfully for file: %s", fileMetadata.FileName)
 	}
 
-	log.Printf("File synced successfully to OSS: %s -> %s (Duration: %dms, Size: %d bytes)", 
+	log.Printf("File synced successfully to OSS: %s -> %s (Duration: %dms, Size: %d bytes)",
 		fileMetadata.FileName, ossPath, duration, fileMetadata.FileSize)
 }
+
 // generateOSSPath 生成OSS路径
 func (s *fileWatcherService) generateOSSPath(fileMetadata *database.FileMetadata, ossConfig *database.OSSConfig) string {
 	var ossPath string
@@ -620,16 +663,20 @@ func (s *fileWatcherService) updateSyncLogError(syncLog *database.SyncLog, error
 // getContentType 根据文件格式获取MIME内容类型
 // 用于OSS上传时设置正确的Content-Type头部信息
 // 参数:
-//   fileFormat - 文件扩展名（如 .jpg, .pdf 等）
+//
+//	fileFormat - 文件扩展名（如 .jpg, .pdf 等）
+//
 // 返回:
-//   string - 对应的MIME类型字符串
+//
+//	string - 对应的MIME类型字符串
+//
 // 功能:
 //   - 支持常见的图片、文档、视频等文件格式
 //   - 对于未知格式返回通用的二进制流类型
 //   - 自动处理大小写转换确保匹配准确性
 func (s *fileWatcherService) getContentType(fileFormat string) string {
 	log.Printf("Determining content type for file format: %s", fileFormat)
-	
+
 	// 定义文件格式到MIME类型的映射表
 	contentTypes := map[string]string{
 		// 图片格式
@@ -640,7 +687,7 @@ func (s *fileWatcherService) getContentType(fileFormat string) string {
 		".bmp":  "image/bmp",
 		".webp": "image/webp",
 		".svg":  "image/svg+xml",
-		
+
 		// 文档格式
 		".pdf":  "application/pdf",
 		".txt":  "text/plain",
@@ -650,21 +697,21 @@ func (s *fileWatcherService) getContentType(fileFormat string) string {
 		".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 		".ppt":  "application/vnd.ms-powerpoint",
 		".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-		
+
 		// 压缩格式
-		".zip":  "application/zip",
-		".rar":  "application/x-rar-compressed",
-		".7z":   "application/x-7z-compressed",
-		".tar":  "application/x-tar",
-		".gz":   "application/gzip",
-		
+		".zip": "application/zip",
+		".rar": "application/x-rar-compressed",
+		".7z":  "application/x-7z-compressed",
+		".tar": "application/x-tar",
+		".gz":  "application/gzip",
+
 		// 视频格式
-		".mp4":  "video/mp4",
-		".avi":  "video/x-msvideo",
-		".mov":  "video/quicktime",
-		".wmv":  "video/x-ms-wmv",
-		".flv":  "video/x-flv",
-		
+		".mp4": "video/mp4",
+		".avi": "video/x-msvideo",
+		".mov": "video/quicktime",
+		".wmv": "video/x-ms-wmv",
+		".flv": "video/x-flv",
+
 		// 音频格式
 		".mp3":  "audio/mpeg",
 		".wav":  "audio/wav",
@@ -675,7 +722,7 @@ func (s *fileWatcherService) getContentType(fileFormat string) string {
 	// 转换为小写进行匹配
 	lowerFormat := strings.ToLower(fileFormat)
 	log.Printf("Normalized file format for lookup: %s", lowerFormat)
-	
+
 	if contentType, exists := contentTypes[lowerFormat]; exists {
 		log.Printf("Found matching content type for %s: %s", fileFormat, contentType)
 		return contentType

@@ -34,7 +34,8 @@ import (
 	"github.com/weiwangfds/scinote/internal/database"
 	"github.com/weiwangfds/scinote/internal/middleware"
 	"github.com/weiwangfds/scinote/internal/router"
-	"github.com/weiwangfds/scinote/internal/service"
+	ossservice "github.com/weiwangfds/scinote/internal/service/oss"
+	watcherservice "github.com/weiwangfds/scinote/internal/service/watcher"
 )
 
 func main() {
@@ -54,8 +55,8 @@ func main() {
 	loggerMiddleware := middleware.NewLoggerMiddleware()
 
 	// 初始化文件监听服务
-	ossConfigService := service.NewOSSConfigService(db)
-	fileWatcherService := service.NewFileWatcherService(db, ossConfigService)
+	ossConfigService := ossservice.NewOSSConfigService(db)
+	fileWatcherService := watcherservice.NewFileWatcherService(db, ossConfigService)
 
 	// 初始化路由
 	r := router.NewRouter(loggerMiddleware, db, cfg)

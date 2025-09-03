@@ -62,6 +62,7 @@ type ossConfigService struct {
 // 初始化OSS配置服务，包含数据库连接和OSS提供商工厂
 // 参数:
 //   - db: GORM数据库连接实例
+//
 // 返回:
 //   - OSSConfigService: OSS配置服务接口实现
 func NewOSSConfigService(db *gorm.DB) OSSConfigService {
@@ -78,12 +79,13 @@ func NewOSSConfigService(db *gorm.DB) OSSConfigService {
 // 验证配置参数并保存到数据库，如果是第一个配置会自动激活
 // 参数:
 //   - config: 要创建的OSS配置信息
+//
 // 返回:
 //   - error: 创建过程中的错误信息
 func (s *ossConfigService) CreateOSSConfig(config *database.OSSConfig) error {
-	log.Printf("Creating new OSS config: %s (Provider: %s, Region: %s, Bucket: %s)", 
+	log.Printf("Creating new OSS config: %s (Provider: %s, Region: %s, Bucket: %s)",
 		config.Name, config.Provider, config.Region, config.Bucket)
-	
+
 	// 验证配置
 	log.Printf("Validating OSS config: %s", config.Name)
 	if err := s.validateOSSConfig(config); err != nil {
@@ -116,8 +118,8 @@ func (s *ossConfigService) CreateOSSConfig(config *database.OSSConfig) error {
 		log.Printf("Failed to create OSS config %s: %v", config.Name, err)
 		return err
 	}
-	
-	log.Printf("Successfully created OSS config: %s (ID: %d, Active: %v)", 
+
+	log.Printf("Successfully created OSS config: %s (ID: %d, Active: %v)",
 		config.Name, config.ID, config.IsActive)
 	return nil
 }
@@ -126,12 +128,13 @@ func (s *ossConfigService) CreateOSSConfig(config *database.OSSConfig) error {
 // 从数据库中查询指定ID的OSS配置信息
 // 参数:
 //   - id: OSS配置的唯一标识符
+//
 // 返回:
 //   - *database.OSSConfig: 查询到的OSS配置信息
 //   - error: 查询过程中的错误信息
 func (s *ossConfigService) GetOSSConfigByID(id uint) (*database.OSSConfig, error) {
 	log.Printf("Getting OSS config by ID: %d", id)
-	
+
 	var config database.OSSConfig
 	if err := s.db.First(&config, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -141,8 +144,8 @@ func (s *ossConfigService) GetOSSConfigByID(id uint) (*database.OSSConfig, error
 		log.Printf("Failed to get OSS config with ID %d: %v", id, err)
 		return nil, err
 	}
-	
-	log.Printf("Successfully retrieved OSS config: %s (ID: %d, Provider: %s, Active: %v)", 
+
+	log.Printf("Successfully retrieved OSS config: %s (ID: %d, Provider: %s, Active: %v)",
 		config.Name, config.ID, config.Provider, config.IsActive)
 	return &config, nil
 }
@@ -154,16 +157,16 @@ func (s *ossConfigService) GetOSSConfigByID(id uint) (*database.OSSConfig, error
 //   - error: 查询过程中的错误信息
 func (s *ossConfigService) ListOSSConfigs() ([]database.OSSConfig, error) {
 	log.Printf("Listing all OSS configs")
-	
+
 	var configs []database.OSSConfig
 	if err := s.db.Order("created_at DESC").Find(&configs).Error; err != nil {
 		log.Printf("Failed to list OSS configs: %v", err)
 		return nil, err
 	}
-	
+
 	log.Printf("Successfully retrieved %d OSS configs", len(configs))
 	for i, config := range configs {
-		log.Printf("Config %d: %s (ID: %d, Provider: %s, Active: %v, Enabled: %v)", 
+		log.Printf("Config %d: %s (ID: %d, Provider: %s, Active: %v, Enabled: %v)",
 			i+1, config.Name, config.ID, config.Provider, config.IsActive, config.IsEnabled)
 	}
 	return configs, nil
@@ -173,12 +176,13 @@ func (s *ossConfigService) ListOSSConfigs() ([]database.OSSConfig, error) {
 // 验证并更新指定的OSS配置，处理激活状态变更
 // 参数:
 //   - config: 要更新的OSS配置信息（包含ID）
+//
 // 返回:
 //   - error: 更新过程中的错误信息
 func (s *ossConfigService) UpdateOSSConfig(config *database.OSSConfig) error {
-	log.Printf("Updating OSS config ID: %d with name: %s (Provider: %s, Region: %s, Bucket: %s)", 
+	log.Printf("Updating OSS config ID: %d with name: %s (Provider: %s, Region: %s, Bucket: %s)",
 		config.ID, config.Name, config.Provider, config.Region, config.Bucket)
-	
+
 	// 验证配置
 	log.Printf("Validating updated OSS config: %s", config.Name)
 	if err := s.validateOSSConfig(config); err != nil {
@@ -211,8 +215,8 @@ func (s *ossConfigService) UpdateOSSConfig(config *database.OSSConfig) error {
 		log.Printf("Failed to update OSS config %s (ID: %d): %v", config.Name, config.ID, err)
 		return err
 	}
-	
-	log.Printf("Successfully updated OSS config: %s (ID: %d, Active: %v)", 
+
+	log.Printf("Successfully updated OSS config: %s (ID: %d, Active: %v)",
 		config.Name, config.ID, config.IsActive)
 	return nil
 }
@@ -221,11 +225,12 @@ func (s *ossConfigService) UpdateOSSConfig(config *database.OSSConfig) error {
 // 删除指定ID的OSS配置，不允许删除激活状态的配置
 // 参数:
 //   - id: 要删除的OSS配置ID
+//
 // 返回:
 //   - error: 删除过程中的错误信息
 func (s *ossConfigService) DeleteOSSConfig(id uint) error {
 	log.Printf("Deleting OSS config with ID: %d", id)
-	
+
 	// 检查是否为激活配置
 	log.Printf("Checking if OSS config ID %d is active before deletion", id)
 	var config database.OSSConfig
@@ -237,7 +242,7 @@ func (s *ossConfigService) DeleteOSSConfig(id uint) error {
 		log.Printf("Failed to retrieve OSS config with ID %d: %v", id, err)
 		return fmt.Errorf("OSS config not found: %w", err)
 	}
-	log.Printf("Found OSS config to delete: %s (Provider: %s, Active: %v)", 
+	log.Printf("Found OSS config to delete: %s (Provider: %s, Active: %v)",
 		config.Name, config.Provider, config.IsActive)
 
 	if config.IsActive {
@@ -250,7 +255,7 @@ func (s *ossConfigService) DeleteOSSConfig(id uint) error {
 		log.Printf("Failed to delete OSS config ID %d: %v", id, err)
 		return err
 	}
-	
+
 	log.Printf("Successfully deleted OSS config: %s (ID: %d)", config.Name, id)
 	return nil
 }
@@ -259,11 +264,12 @@ func (s *ossConfigService) DeleteOSSConfig(id uint) error {
 // 激活指定配置并取消其他配置的激活状态，确保只有一个激活配置
 // 参数:
 //   - id: 要激活的OSS配置ID
+//
 // 返回:
 //   - error: 激活过程中的错误信息
 func (s *ossConfigService) ActivateOSSConfig(id uint) error {
 	log.Printf("Activating OSS config with ID: %d", id)
-	
+
 	// 先获取配置信息用于日志记录
 	var config database.OSSConfig
 	if err := s.db.First(&config, id).Error; err != nil {
@@ -275,7 +281,7 @@ func (s *ossConfigService) ActivateOSSConfig(id uint) error {
 		return fmt.Errorf("OSS config not found: %w", err)
 	}
 	log.Printf("Found OSS config to activate: %s (Provider: %s)", config.Name, config.Provider)
-	
+
 	// 先取消所有配置的激活状态
 	log.Printf("Deactivating all other OSS configs before activating ID: %d", id)
 	if err := s.deactivateAllConfigs(); err != nil {
@@ -291,7 +297,7 @@ func (s *ossConfigService) ActivateOSSConfig(id uint) error {
 		log.Printf("Failed to activate OSS config ID %d: %v", id, err)
 		return fmt.Errorf("failed to activate OSS config: %w", err)
 	}
-	
+
 	log.Printf("Successfully activated OSS config: %s (ID: %d)", config.Name, id)
 	return nil
 }
@@ -300,17 +306,18 @@ func (s *ossConfigService) ActivateOSSConfig(id uint) error {
 // 使用指定配置创建OSS提供商并测试连接是否正常
 // 参数:
 //   - id: 要测试的OSS配置ID
+//
 // 返回:
 //   - error: 测试过程中的错误信息
 func (s *ossConfigService) TestOSSConfig(id uint) error {
 	log.Printf("Testing OSS config connection with ID: %d", id)
-	
+
 	config, err := s.GetOSSConfigByID(id)
 	if err != nil {
 		log.Printf("Failed to get OSS config for testing (ID: %d): %v", id, err)
 		return err
 	}
-	log.Printf("Retrieved OSS config for testing: %s (Provider: %s, Region: %s, Bucket: %s)", 
+	log.Printf("Retrieved OSS config for testing: %s (Provider: %s, Region: %s, Bucket: %s)",
 		config.Name, config.Provider, config.Region, config.Bucket)
 
 	log.Printf("Creating OSS provider for testing: %s", config.Provider)
@@ -326,7 +333,7 @@ func (s *ossConfigService) TestOSSConfig(id uint) error {
 		log.Printf("Connection test failed for OSS config %s: %v", config.Name, err)
 		return err
 	}
-	
+
 	log.Printf("Connection test successful for OSS config: %s (ID: %d)", config.Name, id)
 	return nil
 }
@@ -338,7 +345,7 @@ func (s *ossConfigService) TestOSSConfig(id uint) error {
 //   - error: 查询过程中的错误信息
 func (s *ossConfigService) GetActiveOSSConfig() (*database.OSSConfig, error) {
 	log.Printf("Getting active OSS configuration")
-	
+
 	var config database.OSSConfig
 	if err := s.db.Where("is_active = ? AND is_enabled = ?", true, true).First(&config).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -348,8 +355,8 @@ func (s *ossConfigService) GetActiveOSSConfig() (*database.OSSConfig, error) {
 		log.Printf("Failed to get active OSS configuration: %v", err)
 		return nil, err
 	}
-	
-	log.Printf("Found active OSS configuration: %s (ID: %d, Provider: %s, Region: %s, Bucket: %s)", 
+
+	log.Printf("Found active OSS configuration: %s (ID: %d, Provider: %s, Region: %s, Bucket: %s)",
 		config.Name, config.ID, config.Provider, config.Region, config.Bucket)
 	return &config, nil
 }
@@ -359,11 +366,12 @@ func (s *ossConfigService) GetActiveOSSConfig() (*database.OSSConfig, error) {
 // 参数:
 //   - id: 要切换状态的OSS配置ID
 //   - enabled: 新的启用状态
+//
 // 返回:
 //   - error: 操作过程中的错误信息
 func (s *ossConfigService) ToggleOSSConfig(id uint, enabled bool) error {
 	log.Printf("Toggling OSS config ID %d to enabled: %v", id, enabled)
-	
+
 	// 如果要禁用激活的配置，先检查是否有其他可用配置
 	if !enabled {
 		log.Printf("Checking if OSS config ID %d can be disabled", id)
@@ -391,7 +399,7 @@ func (s *ossConfigService) ToggleOSSConfig(id uint, enabled bool) error {
 		log.Printf("Failed to toggle OSS config ID %d: %v", id, err)
 		return err
 	}
-	
+
 	log.Printf("Successfully toggled OSS config ID %d to enabled: %v", id, enabled)
 	return nil
 }
@@ -400,11 +408,12 @@ func (s *ossConfigService) ToggleOSSConfig(id uint, enabled bool) error {
 // 验证OSS配置的所有必需字段和业务规则
 // 参数:
 //   - config: 要验证的OSS配置
+//
 // 返回:
 //   - error: 验证失败时的错误信息
 func (s *ossConfigService) validateOSSConfig(config *database.OSSConfig) error {
 	log.Printf("Validating OSS config: %s", config.Name)
-	
+
 	if config.Name == "" {
 		log.Printf("Validation failed: configuration name is required")
 		return fmt.Errorf("configuration name is required")
@@ -476,18 +485,18 @@ func (s *ossConfigService) validateOSSConfig(config *database.OSSConfig) error {
 //   - error: 操作过程中的错误信息
 func (s *ossConfigService) deactivateAllConfigs() error {
 	log.Printf("Deactivating all currently active OSS configurations")
-	
+
 	// 先查询当前激活的配置数量用于日志记录
 	var count int64
 	s.db.Model(&database.OSSConfig{}).Where("is_active = ?", true).Count(&count)
 	log.Printf("Found %d active OSS configurations to deactivate", count)
-	
+
 	if err := s.db.Model(&database.OSSConfig{}).Where("is_active = ?", true).
 		Update("is_active", false).Error; err != nil {
 		log.Printf("Failed to deactivate OSS configurations: %v", err)
 		return err
 	}
-	
+
 	log.Printf("Successfully deactivated %d OSS configurations", count)
 	return nil
 }

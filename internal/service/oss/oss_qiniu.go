@@ -32,15 +32,16 @@ type QiniuKodoProvider struct {
 // 根据配置信息初始化七牛云Kodo客户端，包括认证、区域和域名设置
 // 参数:
 //   - config: OSS配置信息，包含访问密钥、存储桶等信息
+//
 // 返回:
 //   - *QiniuKodoProvider: 七牛云Kodo提供商实例
 //   - error: 初始化过程中的错误信息
 func NewQiniuKodoProvider(config *database.OSSConfig) (*QiniuKodoProvider, error) {
-	log.Printf("Creating Qiniu Kodo provider for bucket: %s, region: %s", 
+	log.Printf("Creating Qiniu Kodo provider for bucket: %s, region: %s",
 		config.Bucket, config.Region)
-	
+
 	// 创建认证凭证
-	log.Printf("Initializing Qiniu authentication with access key: %s", 
+	log.Printf("Initializing Qiniu authentication with access key: %s",
 		config.AccessKey[:min(len(config.AccessKey), 8)]+"...")
 	mac := qbox.NewMac(config.AccessKey, config.SecretKey)
 
@@ -69,8 +70,8 @@ func NewQiniuKodoProvider(config *database.OSSConfig) (*QiniuKodoProvider, error
 		region:       region,
 		config:       config,
 	}
-	
-	log.Printf("Successfully created Qiniu Kodo provider for bucket: %s, domain: %s", 
+
+	log.Printf("Successfully created Qiniu Kodo provider for bucket: %s, domain: %s",
 		config.Bucket, bucketDomain)
 	return provider, nil
 }
@@ -81,12 +82,13 @@ func NewQiniuKodoProvider(config *database.OSSConfig) (*QiniuKodoProvider, error
 //   - objectKey: 对象键（文件路径）
 //   - reader: 文件内容读取器
 //   - contentType: 文件MIME类型
+//
 // 返回:
 //   - error: 上传过程中的错误信息
 func (p *QiniuKodoProvider) UploadFile(objectKey string, reader io.Reader, contentType string) error {
-	log.Printf("Uploading file to Qiniu Kodo: %s (bucket: %s, contentType: %s)", 
+	log.Printf("Uploading file to Qiniu Kodo: %s (bucket: %s, contentType: %s)",
 		objectKey, p.bucketName, contentType)
-	
+
 	// 创建上传策略
 	log.Printf("Creating upload policy for object: %s", objectKey)
 	putPolicy := storage.PutPolicy{
@@ -122,7 +124,7 @@ func (p *QiniuKodoProvider) UploadFile(objectKey string, reader io.Reader, conte
 		return fmt.Errorf("failed to upload file to qiniu kodo: %w", err)
 	}
 
-	log.Printf("Successfully uploaded file to Qiniu Kodo: %s (hash: %s)", 
+	log.Printf("Successfully uploaded file to Qiniu Kodo: %s (hash: %s)",
 		objectKey, ret.Hash)
 	return nil
 }
@@ -131,19 +133,20 @@ func (p *QiniuKodoProvider) UploadFile(objectKey string, reader io.Reader, conte
 // 生成私有下载链接并返回文件内容流
 // 参数:
 //   - objectKey: 要下载的对象键（文件路径）
+//
 // 返回:
 //   - io.ReadCloser: 文件内容读取器
 //   - error: 下载过程中的错误信息
 func (p *QiniuKodoProvider) DownloadFile(objectKey string) (io.ReadCloser, error) {
-	log.Printf("Downloading file from Qiniu Kodo: %s (bucket: %s)", 
+	log.Printf("Downloading file from Qiniu Kodo: %s (bucket: %s)",
 		objectKey, p.bucketName)
-	
+
 	// 获取私有下载链接
 	deadline := time.Now().Add(time.Hour).Unix()
-	log.Printf("Generating private download URL for object: %s (expires: %d)", 
+	log.Printf("Generating private download URL for object: %s (expires: %d)",
 		objectKey, deadline)
 	privateURL := storage.MakePrivateURL(p.mac, p.bucketDomain, objectKey, deadline)
-	log.Printf("Generated private URL for download: %s", 
+	log.Printf("Generated private URL for download: %s",
 		privateURL[:min(len(privateURL), 50)]+"...")
 
 	// 使用HTTP客户端下载文件
@@ -162,7 +165,7 @@ func (p *QiniuKodoProvider) DownloadFile(objectKey string) (io.ReadCloser, error
 		return nil, fmt.Errorf("failed to download file, status: %s", resp.Status)
 	}
 
-	log.Printf("Successfully initiated download for file: %s (content-length: %d)", 
+	log.Printf("Successfully initiated download for file: %s (content-length: %d)",
 		objectKey, resp.ContentLength)
 	return resp.Body, nil
 }
@@ -171,12 +174,13 @@ func (p *QiniuKodoProvider) DownloadFile(objectKey string) (io.ReadCloser, error
 // 从存储桶中删除指定的对象
 // 参数:
 //   - objectKey: 要删除的对象键（文件路径）
+//
 // 返回:
 //   - error: 删除过程中的错误信息
 func (p *QiniuKodoProvider) DeleteFile(objectKey string) error {
-	log.Printf("Deleting file from Qiniu Kodo: %s (bucket: %s)", 
+	log.Printf("Deleting file from Qiniu Kodo: %s (bucket: %s)",
 		objectKey, p.bucketName)
-	
+
 	// 创建存储桶管理器
 	log.Printf("Creating bucket manager for deletion operation")
 	bucketManager := storage.NewBucketManager(p.mac, &storage.Config{
@@ -199,13 +203,14 @@ func (p *QiniuKodoProvider) DeleteFile(objectKey string) error {
 // 通过获取文件状态信息来判断文件是否存在于存储桶中
 // 参数:
 //   - objectKey: 要检查的对象键（文件路径）
+//
 // 返回:
 //   - bool: 文件是否存在
 //   - error: 检查过程中的错误信息
 func (p *QiniuKodoProvider) FileExists(objectKey string) (bool, error) {
-	log.Printf("Checking file existence in Qiniu Kodo: %s (bucket: %s)", 
+	log.Printf("Checking file existence in Qiniu Kodo: %s (bucket: %s)",
 		objectKey, p.bucketName)
-	
+
 	// 创建存储桶管理器
 	log.Printf("Creating bucket manager for file existence check")
 	bucketManager := storage.NewBucketManager(p.mac, &storage.Config{
@@ -232,13 +237,14 @@ func (p *QiniuKodoProvider) FileExists(objectKey string) (bool, error) {
 // 返回指定文件的详细信息，包括大小、修改时间、哈希值等
 // 参数:
 //   - objectKey: 要查询的对象键（文件路径）
+//
 // 返回:
 //   - *FileInfo: 文件信息结构体
 //   - error: 查询过程中的错误信息
 func (p *QiniuKodoProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
-	log.Printf("Getting file info from Qiniu Kodo: %s (bucket: %s)", 
+	log.Printf("Getting file info from Qiniu Kodo: %s (bucket: %s)",
 		objectKey, p.bucketName)
-	
+
 	// 创建存储桶管理器
 	log.Printf("Creating bucket manager for file info retrieval")
 	bucketManager := storage.NewBucketManager(p.mac, &storage.Config{
@@ -255,7 +261,7 @@ func (p *QiniuKodoProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 
 	// 转换时间格式
 	lastModified := time.Unix(fileInfo.PutTime/10000000, 0).Format(time.RFC3339)
-	log.Printf("Retrieved file info for %s: size=%d, hash=%s, mimeType=%s, lastModified=%s", 
+	log.Printf("Retrieved file info for %s: size=%d, hash=%s, mimeType=%s, lastModified=%s",
 		objectKey, fileInfo.Fsize, fileInfo.Hash, fileInfo.MimeType, lastModified)
 
 	result := &FileInfo{
@@ -265,7 +271,7 @@ func (p *QiniuKodoProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 		ETag:         fileInfo.Hash,
 		ContentType:  fileInfo.MimeType,
 	}
-	
+
 	log.Printf("Successfully retrieved file info for: %s", objectKey)
 	return result, nil
 }
@@ -275,13 +281,14 @@ func (p *QiniuKodoProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 // 参数:
 //   - prefix: 文件前缀过滤条件
 //   - maxKeys: 返回的最大文件数量
+//
 // 返回:
 //   - []FileInfo: 文件信息列表
 //   - error: 列举过程中的错误信息
 func (p *QiniuKodoProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, error) {
-	log.Printf("Listing files from Qiniu Kodo: prefix=%s, maxKeys=%d (bucket: %s)", 
+	log.Printf("Listing files from Qiniu Kodo: prefix=%s, maxKeys=%d (bucket: %s)",
 		prefix, maxKeys, p.bucketName)
-	
+
 	// 创建存储桶管理器
 	log.Printf("Creating bucket manager for file listing")
 	bucketManager := storage.NewBucketManager(p.mac, &storage.Config{
@@ -310,8 +317,8 @@ func (p *QiniuKodoProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 			ContentType:  entry.MimeType,
 		}
 		files = append(files, fileInfo)
-		
-		log.Printf("File %d: %s (size: %d, hash: %s)", 
+
+		log.Printf("File %d: %s (size: %d, hash: %s)",
 			i+1, entry.Key, entry.Fsize, entry.Hash)
 	}
 
@@ -329,9 +336,9 @@ func (p *QiniuKodoProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 // 返回:
 //   - error: 连接测试过程中的错误信息
 func (p *QiniuKodoProvider) TestConnection() error {
-	log.Printf("Testing connection to Qiniu Kodo (bucket: %s, region: %s)", 
+	log.Printf("Testing connection to Qiniu Kodo (bucket: %s, region: %s)",
 		p.bucketName, p.region.RsHost)
-	
+
 	// 创建存储桶管理器
 	log.Printf("Creating bucket manager for connection test")
 	bucketManager := storage.NewBucketManager(p.mac, &storage.Config{

@@ -5,18 +5,20 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/weiwangfds/scinote/internal/service"
+	"github.com/weiwangfds/scinote/internal/errors"
+	"github.com/weiwangfds/scinote/internal/response"
+	fileservice "github.com/weiwangfds/scinote/internal/service/file"
 )
 
 // FileHandler 文件处理器
 // @Description 文件管理相关的HTTP处理器
 type FileHandler struct {
-	fileService service.FileService
+	fileService fileservice.FileService
 }
 
 // NewFileHandler 创建文件处理器实例
 // @Description 创建新的文件处理器
-func NewFileHandler(fileService service.FileService) *FileHandler {
+func NewFileHandler(fileService fileservice.FileService) *FileHandler {
 	return &FileHandler{
 		fileService: fileService,
 	}
@@ -37,18 +39,14 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	// 获取上传的文件
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "No file uploaded or invalid file",
-		})
+		response.BadRequest(c, "未选择文件或文件无效")
 		return
 	}
 
 	// 打开文件
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to open uploaded file",
-		})
+		response.InternalServerError(c, "无法打开上传的文件")
 		return
 	}
 	defer src.Close()
@@ -56,14 +54,15 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	// 调用文件服务上传文件
 	metadata, err := h.fileService.UploadFile(file.Filename, src)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.Error(c, int(errors.ErrFileUploadFailed), err.Error())
+		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message":  "File uploaded successfully",
+	response.SuccessWithMessage(c, "文件上传成功", gin.H{
 		"file_id":  metadata.FileID,
 		"filename": metadata.FileName,
 		"size":     metadata.FileSize,
@@ -79,27 +78,28 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 // @Produce json
 // @Param id path string true "文件ID"
 // @Success 200 {object} map[string]interface{} "文件信息"
+// @Failure 400 {object} map[string]interface{} "文件ID无效"
 // @Failure 404 {object} map[string]interface{} "文件不存在"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/files/{id} [get]
 func (h *FileHandler) GetFile(c *gin.Context) {
 	fileID := c.Param("id")
 	if fileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "File ID is required",
-		})
+		response.BadRequest(c, "文件ID不能为空")
 		return
 	}
 
 	metadata, err := h.fileService.GetFileByID(fileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.NotFound(c, "文件不存在")
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"file_id":      metadata.FileID,
 		"filename":     metadata.FileName,
 		"size":         metadata.FileSize,
@@ -119,33 +119,36 @@ func (h *FileHandler) GetFile(c *gin.Context) {
 // @Produce application/octet-stream
 // @Param id path string true "文件ID"
 // @Success 200 {file} file "文件内容"
+// @Failure 400 {object} map[string]interface{} "文件ID无效"
 // @Failure 404 {object} map[string]interface{} "文件不存在"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/files/{id}/download [get]
 func (h *FileHandler) DownloadFile(c *gin.Context) {
 	fileID := c.Param("id")
 	if fileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "File ID is required",
-		})
+		response.BadRequest(c, "文件ID不能为空")
 		return
 	}
 
 	// 获取文件信息
 	metadata, err := h.fileService.GetFileByID(fileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.NotFound(c, "文件不存在")
+		}
 		return
 	}
 
 	// 获取文件内容
 	fileContent, err := h.fileService.GetFileContent(fileID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.InternalServerError(c, "文件读取失败")
+		}
 		return
 	}
 	defer fileContent.Close()
@@ -190,19 +193,15 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 	// 获取文件列表
 	files, total, err := h.fileService.ListFiles(page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.InternalServerError(c, "获取文件列表失败")
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"files":      files,
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-	})
+	response.SuccessWithPage(c, files, total, page, pageSize)
 }
 
 // SearchFiles 搜索文件
@@ -220,9 +219,7 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 func (h *FileHandler) SearchFiles(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Search query is required",
-		})
+		response.BadRequest(c, "搜索关键词不能为空")
 		return
 	}
 
@@ -245,19 +242,31 @@ func (h *FileHandler) SearchFiles(c *gin.Context) {
 	// 搜索文件
 	files, total, err := h.fileService.SearchFilesByName(query, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.InternalServerError(c, "搜索文件失败")
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"files":      files,
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-		"query":      query,
+	// 构建分页数据
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	pageData := response.PageData{
+		List:       files,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}
+
+	response.SuccessWithMessage(c, "搜索完成", gin.H{
+		"result": pageData,
+		"query":  query,
 	})
 }
 
@@ -268,28 +277,28 @@ func (h *FileHandler) SearchFiles(c *gin.Context) {
 // @Produce json
 // @Param id path string true "文件ID"
 // @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "文件ID无效"
 // @Failure 404 {object} map[string]interface{} "文件不存在"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/files/{id} [delete]
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	fileID := c.Param("id")
 	if fileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "File ID is required",
-		})
+		response.BadRequest(c, "文件ID不能为空")
 		return
 	}
 
 	err := h.fileService.DeleteFile(fileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.NotFound(c, "文件不存在或删除失败")
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "File deleted successfully",
+	response.SuccessWithMessage(c, "文件删除成功", gin.H{
 		"file_id": fileID,
 	})
 }
@@ -310,27 +319,21 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 func (h *FileHandler) UpdateFile(c *gin.Context) {
 	fileID := c.Param("id")
 	if fileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "File ID is required",
-		})
+		response.BadRequest(c, "文件ID不能为空")
 		return
 	}
 
 	// 获取上传的文件
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "No file uploaded or invalid file",
-		})
+		response.BadRequest(c, "未选择文件或文件无效")
 		return
 	}
 
 	// 打开文件
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to open uploaded file",
-		})
+		response.InternalServerError(c, "无法打开上传的文件")
 		return
 	}
 	defer src.Close()
@@ -338,14 +341,15 @@ func (h *FileHandler) UpdateFile(c *gin.Context) {
 	// 调用文件服务更新文件
 	metadata, err := h.fileService.UpdateFile(fileID, src)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.Error(c, int(errors.ErrFileUploadFailed), err.Error())
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":      "File updated successfully",
+	response.SuccessWithMessage(c, "文件更新成功", gin.H{
 		"file_id":      metadata.FileID,
 		"filename":     metadata.FileName,
 		"size":         metadata.FileSize,
@@ -366,11 +370,13 @@ func (h *FileHandler) UpdateFile(c *gin.Context) {
 func (h *FileHandler) GetFileStats(c *gin.Context) {
 	stats, err := h.fileService.GetFileStats()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if appErr, ok := errors.GetAppError(err); ok {
+			response.Error(c, int(appErr.Code), appErr.Message)
+		} else {
+			response.InternalServerError(c, "获取文件统计信息失败")
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, stats)
+	response.Success(c, stats)
 }

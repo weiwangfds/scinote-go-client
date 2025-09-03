@@ -9,7 +9,8 @@ import (
 	_ "github.com/weiwangfds/scinote/docs" // swagger docs
 	"github.com/weiwangfds/scinote/internal/handler"
 	"github.com/weiwangfds/scinote/internal/middleware"
-	"github.com/weiwangfds/scinote/internal/service"
+	fileservice "github.com/weiwangfds/scinote/internal/service/file"
+	ossservice "github.com/weiwangfds/scinote/internal/service/oss"
 	"gorm.io/gorm"
 )
 
@@ -27,9 +28,9 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 	engine := gin.New()
 
 	// 初始化服务
-	ossConfigService := service.NewOSSConfigService(db)
-	fileService := service.NewFileService(db, cfg.File)
-	ossSyncService := service.NewOSSyncService(db, fileService)
+	ossConfigService := ossservice.NewOSSConfigService(db)
+	fileService := fileservice.NewFileService(db, cfg.File)
+	ossSyncService := ossservice.NewOSSyncService(db, fileService)
 	// 设置OSS同步服务到文件服务中
 	fileService.SetOSSSyncService(ossSyncService)
 

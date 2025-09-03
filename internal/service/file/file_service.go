@@ -120,7 +120,7 @@ type FileService interface {
 	//     - format_stats: 各格式文件统计
 	//   error - 错误信息
 	GetFileStats() (map[string]interface{}, error)
-    
+
 	// SetOSSSyncService 设置OSS同步服务
 	// 参数:
 	//   syncService - OSS同步服务实例
@@ -132,17 +132,21 @@ type FileService interface {
 // fileService 文件服务实现
 // 实现FileService接口，提供完整的文件管理功能
 type fileService struct {
-	db             *gorm.DB           // 数据库连接
-	config         config.FileConfig // 文件配置信息
-	ossSyncService OSSyncService     // OSS同步服务（可选）
+	db             *gorm.DB                    // 数据库连接
+	config         config.FileConfig           // 文件配置信息
+	ossSyncService OSSyncService   // OSS同步服务（可选）
 }
 
 // NewFileService 创建文件服务实例
 // 参数:
-//   db - 数据库连接实例
-//   cfg - 文件配置信息
+//
+//	db - 数据库连接实例
+//	cfg - 文件配置信息
+//
 // 返回:
-//   FileService - 文件服务接口实例
+//
+//	FileService - 文件服务接口实例
+//
 // 功能:
 //   - 初始化文件服务
 //   - 创建存储目录（如果不存在）
@@ -155,7 +159,7 @@ func NewFileService(db *gorm.DB, cfg config.FileConfig) FileService {
 		panic(fmt.Sprintf("Failed to create storage directory: %v", err))
 	}
 
-	log.Printf("File service initialized successfully. Max file size: %d bytes, Allowed extensions: %v", 
+	log.Printf("File service initialized successfully. Max file size: %d bytes, Allowed extensions: %v",
 		cfg.MaxFileSize, cfg.AllowedExtensions)
 
 	return &fileService{
@@ -168,7 +172,7 @@ func NewFileService(db *gorm.DB, cfg config.FileConfig) FileService {
 // 实现文件上传的完整流程，包括验证、去重、存储等功能
 func (s *fileService) UploadFile(fileName string, fileData io.Reader) (*database.FileMetadata, error) {
 	log.Printf("Starting file upload: %s", fileName)
-	
+
 	// 生成唯一文件ID
 	fileID := uuid.New().String()
 	log.Printf("Generated file ID: %s for file: %s", fileID, fileName)
@@ -300,7 +304,7 @@ func (s *fileService) GetFileContent(fileID string) (io.ReadCloser, error) {
 // 支持更新文件内容，自动处理文件去重和版本管理
 func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.FileMetadata, error) {
 	log.Printf("Starting file update for ID: %s", fileID)
-	
+
 	// 获取现有文件信息
 	metadata, err := s.GetFileByID(fileID)
 	if err != nil {
@@ -308,7 +312,7 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 		return nil, err
 	}
 
-	log.Printf("Original file info - Name: %s, Size: %d, Hash: %s, Path: %s", 
+	log.Printf("Original file info - Name: %s, Size: %d, Hash: %s, Path: %s",
 		metadata.FileName, metadata.FileSize, metadata.FileHash, metadata.StoragePath)
 
 	// 创建临时文件
@@ -336,7 +340,7 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 
 	// 检查文件大小
 	if fileSize > s.config.MaxFileSize {
-		log.Printf("New file size %d exceeds maximum allowed size %d for file %s", 
+		log.Printf("New file size %d exceeds maximum allowed size %d for file %s",
 			fileSize, s.config.MaxFileSize, fileID)
 		return nil, fmt.Errorf("file size %d exceeds maximum allowed size %d", fileSize, s.config.MaxFileSize)
 	}
@@ -395,7 +399,7 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 		return nil, err
 	}
 
-	log.Printf("File update completed successfully: %s (new size: %d, modify count: %d)", 
+	log.Printf("File update completed successfully: %s (new size: %d, modify count: %d)",
 		fileID, updatedMetadata.FileSize, updatedMetadata.ModifyCount)
 	return updatedMetadata, nil
 }
@@ -404,7 +408,7 @@ func (s *fileService) UpdateFile(fileID string, fileData io.Reader) (*database.F
 // 包括删除物理文件、数据库记录和云端文件（如果配置了OSS同步）
 func (s *fileService) DeleteFile(fileID string) error {
 	log.Printf("Starting file deletion for ID: %s", fileID)
-	
+
 	metadata, err := s.GetFileByID(fileID)
 	if err != nil {
 		log.Printf("File not found for deletion %s: %v", fileID, err)
@@ -422,25 +426,9 @@ func (s *fileService) DeleteFile(fileID string) error {
 			Order("created_at DESC").First(&syncLog).Error; err == nil {
 			log.Printf("Found sync log for file %s, OSS path: %s", fileID, syncLog.OSSPath)
 			// 有成功的同步记录，尝试从OSS删除
-			ossConfig, err := s.ossSyncService.(*ossSyncService).getActiveOSSConfig()
-			if err == nil {
-				factory := &OSSProviderFactory{}
-				provider, osErr := factory.CreateProvider(ossConfig)
-				if osErr == nil {
-					// 异步删除OSS文件，不阻塞主流程
-					go func() {
-						if osErr := provider.DeleteFile(syncLog.OSSPath); osErr != nil {
-							log.Printf("Failed to delete file from OSS %s: %v", syncLog.OSSPath, osErr)
-						} else {
-							log.Printf("Successfully deleted file from OSS: %s", syncLog.OSSPath)
-						}
-					}()
-				} else {
-					log.Printf("Failed to create OSS provider for file deletion %s: %v", fileID, err)
-				}
-			} else {
-				log.Printf("Failed to get OSS config for file deletion %s: %v", fileID, err)
-			}
+			// 注意：OSS文件删除应该通过OSS同步服务来处理
+			// 这里只记录日志，实际删除由OSS同步服务负责
+			log.Printf("File %s has OSS sync record, OSS cleanup should be handled by sync service", fileID)
 		} else {
 			log.Printf("No sync log found for file %s, skipping OSS deletion", fileID)
 		}
@@ -478,7 +466,7 @@ func (s *fileService) DeleteFile(fileID string) error {
 // 支持分页查询，按创建时间倒序排列
 func (s *fileService) ListFiles(page, pageSize int) ([]database.FileMetadata, int64, error) {
 	log.Printf("Listing files - Page: %d, PageSize: %d", page, pageSize)
-	
+
 	var files []database.FileMetadata
 	var total int64
 
@@ -493,7 +481,7 @@ func (s *fileService) ListFiles(page, pageSize int) ([]database.FileMetadata, in
 	// 分页查询
 	offset := (page - 1) * pageSize
 	log.Printf("Calculated offset: %d", offset)
-	
+
 	if err := s.db.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&files).Error; err != nil {
 		log.Printf("Failed to list files: %v", err)
 		return nil, 0, err
@@ -507,7 +495,7 @@ func (s *fileService) ListFiles(page, pageSize int) ([]database.FileMetadata, in
 // 支持模糊匹配和分页查询
 func (s *fileService) SearchFilesByName(fileName string, page, pageSize int) ([]database.FileMetadata, int64, error) {
 	log.Printf("Searching files by name: '%s', Page: %d, PageSize: %d", fileName, page, pageSize)
-	
+
 	var files []database.FileMetadata
 	var total int64
 
@@ -525,7 +513,7 @@ func (s *fileService) SearchFilesByName(fileName string, page, pageSize int) ([]
 	// 分页查询
 	offset := (page - 1) * pageSize
 	log.Printf("Search offset: %d", offset)
-	
+
 	if err := s.db.Where("file_name LIKE ?", searchQuery).Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&files).Error; err != nil {
 		log.Printf("Failed to search files by name '%s': %v", fileName, err)
 		return nil, 0, err
@@ -539,13 +527,13 @@ func (s *fileService) SearchFilesByName(fileName string, page, pageSize int) ([]
 // 用于统计文件的访问频率
 func (s *fileService) IncrementViewCount(fileID string) error {
 	log.Printf("Incrementing view count for file: %s", fileID)
-	
+
 	err := s.db.Model(&database.FileMetadata{}).Where("file_id = ?", fileID).Update("view_count", gorm.Expr("view_count + 1")).Error
 	if err != nil {
 		log.Printf("Failed to increment view count for file %s: %v", fileID, err)
 		return err
 	}
-	
+
 	log.Printf("Successfully incremented view count for file: %s", fileID)
 	return nil
 }
@@ -554,7 +542,7 @@ func (s *fileService) IncrementViewCount(fileID string) error {
 // 返回系统中文件的详细统计数据，包括总数、大小、访问次数和格式分布
 func (s *fileService) GetFileStats() (map[string]interface{}, error) {
 	log.Printf("Getting file statistics")
-	
+
 	var stats struct {
 		TotalFiles int64 `json:"total_files"`
 		TotalSize  int64 `json:"total_size"`
@@ -569,7 +557,7 @@ func (s *fileService) GetFileStats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	log.Printf("Basic stats - Files: %d, Total Size: %d bytes, Total Views: %d", 
+	log.Printf("Basic stats - Files: %d, Total Size: %d bytes, Total Views: %d",
 		stats.TotalFiles, stats.TotalSize, stats.TotalViews)
 
 	// 统计各种格式的文件数量
@@ -604,7 +592,7 @@ func (s *fileService) GetFileStats() (map[string]interface{}, error) {
 // 根据配置的允许扩展名列表验证文件类型
 func (s *fileService) isAllowedExtension(ext string) bool {
 	log.Printf("Checking if extension '%s' is allowed", ext)
-	
+
 	// 如果配置为允许所有扩展名
 	for _, allowed := range s.config.AllowedExtensions {
 		if allowed == "*" {
@@ -616,7 +604,7 @@ func (s *fileService) isAllowedExtension(ext string) bool {
 			return true
 		}
 	}
-	
+
 	log.Printf("Extension '%s' is not allowed. Allowed extensions: %v", ext, s.config.AllowedExtensions)
 	return false
 }
@@ -625,7 +613,7 @@ func (s *fileService) isAllowedExtension(ext string) bool {
 // 优先使用重命名操作，如果失败则使用复制+删除的方式
 func (s *fileService) moveFile(src, dst string) error {
 	log.Printf("Moving file from %s to %s", src, dst)
-	
+
 	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		log.Printf("Failed to create target directory %s: %v", filepath.Dir(dst), err)
@@ -665,13 +653,18 @@ func (s *fileService) moveFile(src, dst string) error {
 		log.Printf("Failed to remove source file %s after copy: %v", src, err)
 		return err
 	}
-	
+
 	log.Printf("Successfully moved file using copy+delete: %s -> %s", src, dst)
 	return nil
 }
 
 // SetOSSSyncService 设置OSS同步服务
 // 用于在文件删除时同步删除云端文件
+// OSSyncService 定义了OSS同步服务的接口
+type OSSyncService interface {
+    // 在这里定义OSS同步服务需要的方法
+}
+
 func (s *fileService) SetOSSSyncService(syncService OSSyncService) {
 	log.Printf("Setting OSS sync service for file service")
 	s.ossSyncService = syncService

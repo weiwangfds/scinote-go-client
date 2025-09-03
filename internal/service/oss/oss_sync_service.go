@@ -6,6 +6,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -26,6 +27,15 @@ var (
 	// ErrSyncInProgress 同步操作正在进行中错误
 	ErrSyncInProgress = errors.New("sync operation already in progress")
 )
+
+// FileService 文件服务接口，定义OSS同步服务需要的文件操作方法
+// 这里只定义OSS同步服务实际需要的方法，避免循环导入
+type FileService interface {
+	// GetFileByID 根据文件ID获取文件元数据信息
+	GetFileByID(fileID string) (*database.FileMetadata, error)
+	// UploadFile 上传文件并返回文件元数据
+	UploadFile(fileName string, reader io.Reader) (*database.FileMetadata, error)
+}
 
 // OSSyncService OSS同步服务接口
 // 定义了文件与云存储之间同步操作的所有方法
@@ -103,19 +113,22 @@ type ossSyncService struct {
 
 // NewOSSyncService 创建OSS同步服务实例
 // 参数:
-//   db: 数据库连接实例
-//   fileService: 文件服务实例
+//
+//	db: 数据库连接实例
+//	fileService: 文件服务实例
+//
 // 返回:
-//   OSSyncService: OSS同步服务接口实例
+//
+//	OSSyncService: OSS同步服务接口实例
 func NewOSSyncService(db *gorm.DB, fileService FileService) OSSyncService {
 	log.Println("[OSS同步服务] 正在创建OSS同步服务实例")
-	
+
 	service := &ossSyncService{
 		db:          db,
 		fileService: fileService,
 		factory:     &OSSProviderFactory{},
 	}
-	
+
 	log.Println("[OSS同步服务] OSS同步服务实例创建成功")
 	return service
 }
@@ -123,12 +136,15 @@ func NewOSSyncService(db *gorm.DB, fileService FileService) OSSyncService {
 // SyncToOSS 同步单个文件到OSS
 // 功能: 将本地文件上传到云存储服务
 // 参数:
-//   fileID: 要同步的文件ID
+//
+//	fileID: 要同步的文件ID
+//
 // 返回:
-//   error: 同步过程中的错误信息
+//
+//	error: 同步过程中的错误信息
 func (s *ossSyncService) SyncToOSS(fileID string) error {
 	log.Printf("[OSS同步服务] 开始同步文件到OSS, 文件ID: %s", fileID)
-	
+
 	// 获取激活的OSS配置
 	log.Println("[OSS同步服务] 正在获取激活的OSS配置")
 	ossConfig, err := s.getActiveOSSConfig()
@@ -159,7 +175,7 @@ func (s *ossSyncService) SyncToOSS(fileID string) error {
 	// 创建同步日志
 	ossPath := s.generateOSSPath(fileMetadata)
 	log.Printf("[OSS同步服务] 生成OSS路径: %s", ossPath)
-	
+
 	syncLog := &database.SyncLog{
 		FileID:      fileID,
 		OSSConfigID: ossConfig.ID,
@@ -187,13 +203,16 @@ func (s *ossSyncService) SyncToOSS(fileID string) error {
 // SyncFromOSS 从OSS同步文件到本地
 // 功能: 从云存储服务下载文件到本地
 // 参数:
-//   fileID: 本地文件ID
-//   ossPath: OSS中的文件路径
+//
+//	fileID: 本地文件ID
+//	ossPath: OSS中的文件路径
+//
 // 返回:
-//   error: 同步过程中的错误信息
+//
+//	error: 同步过程中的错误信息
 func (s *ossSyncService) SyncFromOSS(fileID string, ossPath string) error {
 	log.Printf("[OSS同步服务] 开始从OSS同步文件到本地, 文件ID: %s, OSS路径: %s", fileID, ossPath)
-	
+
 	// 获取激活的OSS配置
 	log.Println("[OSS同步服务] 正在获取激活的OSS配置")
 	ossConfig, err := s.getActiveOSSConfig()
@@ -271,18 +290,21 @@ func (s *ossSyncService) SyncFromOSS(fileID string, ossPath string) error {
 // BatchSyncToOSS 批量同步文件到OSS
 // 功能: 批量将多个本地文件上传到云存储服务
 // 参数:
-//   fileIDs: 要同步的文件ID列表
+//
+//	fileIDs: 要同步的文件ID列表
+//
 // 返回:
-//   error: 批量同步过程中的错误信息
+//
+//	error: 批量同步过程中的错误信息
 func (s *ossSyncService) BatchSyncToOSS(fileIDs []string) error {
 	log.Printf("[OSS同步服务] 开始批量同步文件到OSS, 文件数量: %d", len(fileIDs))
-	
+
 	var errors []string
 	successCount := 0
 
 	for i, fileID := range fileIDs {
 		log.Printf("[OSS同步服务] 正在同步第 %d/%d 个文件, 文件ID: %s", i+1, len(fileIDs), fileID)
-		
+
 		if err := s.SyncToOSS(fileID); err != nil {
 			errorMsg := fmt.Sprintf("file %s: %v", fileID, err)
 			errors = append(errors, errorMsg)
@@ -294,7 +316,7 @@ func (s *ossSyncService) BatchSyncToOSS(fileIDs []string) error {
 	}
 
 	log.Printf("[OSS同步服务] 批量同步完成, 成功启动: %d, 失败: %d", successCount, len(errors))
-	
+
 	if len(errors) > 0 {
 		errorMsg := fmt.Sprintf("batch sync errors: %s", strings.Join(errors, "; "))
 		log.Printf("[OSS同步服务] 批量同步存在错误: %s", errorMsg)
@@ -308,10 +330,11 @@ func (s *ossSyncService) BatchSyncToOSS(fileIDs []string) error {
 // SyncAllFromOSS 从OSS同步所有文件到本地
 // 功能: 从云存储服务下载所有文件到本地存储
 // 返回:
-//   error: 同步过程中的错误信息
+//
+//	error: 同步过程中的错误信息
 func (s *ossSyncService) SyncAllFromOSS() error {
 	log.Println("[OSS同步服务] 开始从OSS同步所有文件到本地")
-	
+
 	// 获取激活的OSS配置
 	log.Println("[OSS同步服务] 正在获取激活的OSS配置")
 	ossConfig, err := s.getActiveOSSConfig()
@@ -357,10 +380,10 @@ func (s *ossSyncService) SyncAllFromOSS() error {
 	log.Printf("[OSS同步服务] 开始为 %d 个文件创建下载任务", len(ossFiles))
 	var syncErrors []string
 	successCount := 0
-	
+
 	for i, ossFile := range ossFiles {
 		log.Printf("[OSS同步服务] 正在处理第 %d/%d 个文件: %s", i+1, len(ossFiles), ossFile.Key)
-		
+
 		// 为每个文件生成唯一的ID
 		fileID := uuid.New().String()
 		log.Printf("[OSS同步服务] 为文件生成ID: %s -> %s", ossFile.Key, fileID)
@@ -390,7 +413,7 @@ func (s *ossSyncService) SyncAllFromOSS() error {
 	}
 
 	log.Printf("[OSS同步服务] 全量同步任务创建完成, 成功: %d, 失败: %d", successCount, len(syncErrors))
-	
+
 	if len(syncErrors) > 0 {
 		errorMsg := fmt.Sprintf("some files failed to start sync: %s", strings.Join(syncErrors, "; "))
 		log.Printf("[OSS同步服务] 部分文件同步启动失败: %s", errorMsg)
@@ -404,12 +427,13 @@ func (s *ossSyncService) SyncAllFromOSS() error {
 // ScanAndCompareFiles 扫描文件表并与云端对比
 // 功能: 对比本地文件和云端文件，找出差异
 // 返回:
-//   []string: 需要更新的文件列表
-//   []string: 仅存在于云端的文件列表
-//   error: 扫描过程中的错误信息
+//
+//	[]string: 需要更新的文件列表
+//	[]string: 仅存在于云端的文件列表
+//	error: 扫描过程中的错误信息
 func (s *ossSyncService) ScanAndCompareFiles() ([]string, []string, error) {
 	log.Println("[OSS同步服务] 开始扫描文件表并与云端对比")
-	
+
 	// 获取激活的OSS配置
 	log.Println("[OSS同步服务] 正在获取激活的OSS配置")
 	ossConfig, err := s.getActiveOSSConfig()
@@ -490,15 +514,18 @@ func (s *ossSyncService) ScanAndCompareFiles() ([]string, []string, error) {
 // GetSyncLogs 获取同步日志
 // 功能: 分页查询同步日志记录
 // 参数:
-//   page: 页码
-//   pageSize: 每页大小
+//
+//	page: 页码
+//	pageSize: 每页大小
+//
 // 返回:
-//   []database.SyncLog: 同步日志列表
-//   int64: 总记录数
-//   error: 查询过程中的错误信息
+//
+//	[]database.SyncLog: 同步日志列表
+//	int64: 总记录数
+//	error: 查询过程中的错误信息
 func (s *ossSyncService) GetSyncLogs(page, pageSize int) ([]database.SyncLog, int64, error) {
 	log.Printf("[OSS同步服务] 开始获取同步日志, 页码: %d, 每页大小: %d", page, pageSize)
-	
+
 	var logs []database.SyncLog
 	var total int64
 
@@ -526,13 +553,16 @@ func (s *ossSyncService) GetSyncLogs(page, pageSize int) ([]database.SyncLog, in
 // GetFileSyncStatus 获取文件的同步状态
 // 功能: 查询指定文件的最新同步状态
 // 参数:
-//   fileID: 文件ID
+//
+//	fileID: 文件ID
+//
 // 返回:
-//   *database.SyncLog: 最新的同步日志
-//   error: 查询过程中的错误信息
+//
+//	*database.SyncLog: 最新的同步日志
+//	error: 查询过程中的错误信息
 func (s *ossSyncService) GetFileSyncStatus(fileID string) (*database.SyncLog, error) {
 	log.Printf("[OSS同步服务] 开始获取文件同步状态, 文件ID: %s", fileID)
-	
+
 	var syncLog database.SyncLog
 	log.Printf("[OSS同步服务] 正在查询文件的最新同步日志, 文件ID: %s", fileID)
 	if err := s.db.Where("file_id = ?", fileID).
@@ -552,12 +582,15 @@ func (s *ossSyncService) GetFileSyncStatus(fileID string) (*database.SyncLog, er
 // RetryFailedSync 重试失败的同步任务
 // 功能: 重新执行失败的同步任务
 // 参数:
-//   logID: 同步日志ID
+//
+//	logID: 同步日志ID
+//
 // 返回:
-//   error: 重试过程中的错误信息
+//
+//	error: 重试过程中的错误信息
 func (s *ossSyncService) RetryFailedSync(logID uint) error {
 	log.Printf("[OSS同步服务] 开始重试失败的同步任务, 日志ID: %d", logID)
-	
+
 	var syncLog database.SyncLog
 	log.Printf("[OSS同步服务] 正在查询同步日志, 日志ID: %d", logID)
 	if err := s.db.Preload("OSSConfig").First(&syncLog, logID).Error; err != nil {
@@ -608,11 +641,12 @@ func (s *ossSyncService) RetryFailedSync(logID uint) error {
 // getActiveOSSConfig 获取激活的OSS配置
 // 功能: 查询当前激活且启用的OSS配置
 // 返回:
-//   *database.OSSConfig: 激活的OSS配置
-//   error: 查询过程中的错误信息
+//
+//	*database.OSSConfig: 激活的OSS配置
+//	error: 查询过程中的错误信息
 func (s *ossSyncService) getActiveOSSConfig() (*database.OSSConfig, error) {
 	log.Println("[OSS同步服务] 正在查询激活的OSS配置")
-	
+
 	var config database.OSSConfig
 	if err := s.db.Where("is_active = ? AND is_enabled = ?", true, true).First(&config).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -630,12 +664,15 @@ func (s *ossSyncService) getActiveOSSConfig() (*database.OSSConfig, error) {
 // generateOSSPath 生成OSS路径
 // 功能: 根据文件元数据生成OSS存储路径
 // 参数:
-//   fileMetadata: 文件元数据
+//
+//	fileMetadata: 文件元数据
+//
 // 返回:
-//   string: 生成的OSS路径
+//
+//	string: 生成的OSS路径
 func (s *ossSyncService) generateOSSPath(fileMetadata *database.FileMetadata) string {
 	log.Printf("[OSS同步服务] 正在生成OSS路径, 文件ID: %s, 文件名: %s", fileMetadata.FileID, fileMetadata.FileName)
-	
+
 	// 使用年/月/日的目录结构
 	now := time.Now()
 	datePath := fmt.Sprintf("%d/%02d/%02d", now.Year(), now.Month(), now.Day())
@@ -654,9 +691,10 @@ func (s *ossSyncService) generateOSSPath(fileMetadata *database.FileMetadata) st
 // performSync 执行上传同步
 // 功能: 执行文件上传到OSS的同步操作
 // 参数:
-//   syncLog: 同步日志记录
-//   ossConfig: OSS配置
-//   fileMetadata: 文件元数据
+//
+//	syncLog: 同步日志记录
+//	ossConfig: OSS配置
+//	fileMetadata: 文件元数据
 func (s *ossSyncService) performSync(syncLog *database.SyncLog, ossConfig *database.OSSConfig, fileMetadata *database.FileMetadata) {
 	log.Printf("[OSS同步服务] 开始执行上传同步操作, 文件ID: %s, OSS路径: %s", fileMetadata.FileID, syncLog.OSSPath)
 	startTime := time.Now()
@@ -712,9 +750,10 @@ func (s *ossSyncService) performSync(syncLog *database.SyncLog, ossConfig *datab
 // performDownloadSync 执行下载同步
 // 功能: 执行从OSS下载文件到本地的同步操作
 // 参数:
-//   syncLog: 同步日志记录
-//   ossConfig: OSS配置
-//   ossFileInfo: OSS文件信息
+//
+//	syncLog: 同步日志记录
+//	ossConfig: OSS配置
+//	ossFileInfo: OSS文件信息
 func (s *ossSyncService) performDownloadSync(syncLog *database.SyncLog, ossConfig *database.OSSConfig, ossFileInfo *FileInfo) {
 	log.Printf("[OSS同步服务] 开始执行下载同步操作, 文件ID: %s, OSS路径: %s", syncLog.FileID, syncLog.OSSPath)
 	startTime := time.Now()
@@ -774,11 +813,12 @@ func (s *ossSyncService) performDownloadSync(syncLog *database.SyncLog, ossConfi
 // updateSyncLogError 更新同步日志错误信息
 // 功能: 更新同步日志的错误状态和错误信息
 // 参数:
-//   syncLog: 同步日志记录
-//   errorMsg: 错误信息
+//
+//	syncLog: 同步日志记录
+//	errorMsg: 错误信息
 func (s *ossSyncService) updateSyncLogError(syncLog *database.SyncLog, errorMsg string) {
 	log.Printf("[OSS同步服务] 更新同步日志错误信息, 日志ID: %d, 错误: %s", syncLog.ID, errorMsg)
-	
+
 	// 对于临时失败，使用pending_retry状态而不是failed
 	updates := map[string]interface{}{
 		"status":    "pending_retry",
@@ -797,12 +837,15 @@ func (s *ossSyncService) updateSyncLogError(syncLog *database.SyncLog, errorMsg 
 // getContentType 根据文件格式获取内容类型
 // 功能: 根据文件格式判断并返回对应的MIME类型
 // 参数:
-//   fileFormat: 文件格式（扩展名）
+//
+//	fileFormat: 文件格式（扩展名）
+//
 // 返回:
-//   string: 对应的MIME类型
+//
+//	string: 对应的MIME类型
 func (s *ossSyncService) getContentType(fileFormat string) string {
 	log.Printf("[OSS同步服务] 正在判断文件内容类型, 文件格式: %s", fileFormat)
-	
+
 	// 使用mime包自动检测文件类型,允许所有格式
 	contentTypes := map[string]string{} // 空map,不限制文件类型
 
