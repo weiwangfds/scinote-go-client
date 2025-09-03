@@ -3,7 +3,10 @@ package router
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/weiwangfds/scinote/config"
+	_ "github.com/weiwangfds/scinote/docs" // swagger docs
 	"github.com/weiwangfds/scinote/internal/handler"
 	"github.com/weiwangfds/scinote/internal/middleware"
 	"github.com/weiwangfds/scinote/internal/service"
@@ -48,6 +51,9 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 		AllowCredentials: true,
 		MaxAge:           86400,
 	}))
+
+	// Swagger文档路由
+	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 健康检查
 	engine.GET("/health", func(c *gin.Context) {

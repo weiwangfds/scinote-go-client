@@ -16,8 +16,6 @@ type FileHandler struct {
 
 // NewFileHandler 创建文件处理器实例
 // @Description 创建新的文件处理器
-// @Param fileService 文件服务接口
-// @Return *FileHandler 文件处理器实例
 func NewFileHandler(fileService service.FileService) *FileHandler {
 	return &FileHandler{
 		fileService: fileService,

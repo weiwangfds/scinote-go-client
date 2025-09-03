@@ -24,6 +24,15 @@ func NewOSSHandler(ossConfigService service.OSSConfigService, ossSyncService ser
 }
 
 // CreateOSSConfig 创建OSS配置
+// @Summary 创建OSS配置
+// @Description 创建新的OSS存储配置，支持阿里云、腾讯云、七牛云等多种云存储服务
+// @Tags OSS配置管理
+// @Accept json
+// @Produce json
+// @Param config body database.OSSConfig true "OSS配置信息"
+// @Success 201 {object} map[string]interface{} "创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Router /oss/configs [post]
 func (h *OSSHandler) CreateOSSConfig(c *gin.Context) {
 	var config database.OSSConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
@@ -47,6 +56,16 @@ func (h *OSSHandler) CreateOSSConfig(c *gin.Context) {
 }
 
 // GetOSSConfig 获取OSS配置
+// @Summary 获取单个OSS配置
+// @Description 根据配置ID获取指定的OSS配置详细信息
+// @Tags OSS配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "配置ID"
+// @Success 200 {object} database.OSSConfig "获取成功"
+// @Failure 400 {object} map[string]interface{} "配置ID无效"
+// @Failure 404 {object} map[string]interface{} "配置不存在"
+// @Router /oss/configs/{id} [get]
 func (h *OSSHandler) GetOSSConfig(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -71,6 +90,14 @@ func (h *OSSHandler) GetOSSConfig(c *gin.Context) {
 }
 
 // ListOSSConfigs 获取OSS配置列表
+// @Summary 获取所有OSS配置
+// @Description 获取系统中所有已配置的OSS存储配置列表
+// @Tags OSS配置管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "获取成功"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /oss/configs [get]
 func (h *OSSHandler) ListOSSConfigs(c *gin.Context) {
 	configs, err := h.ossConfigService.ListOSSConfigs()
 	if err != nil {
