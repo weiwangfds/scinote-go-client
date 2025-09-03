@@ -17,10 +17,15 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port         int    `mapstructure:"port"`
-	Mode         string `mapstructure:"mode"`
-	ReadTimeout  int    `mapstructure:"read_timeout"`
-	WriteTimeout int    `mapstructure:"write_timeout"`
+	Port         int    `mapstructure:"port"`          // HTTP端口
+	HTTPSPort    int    `mapstructure:"https_port"`    // HTTPS端口
+	Mode         string `mapstructure:"mode"`          // 运行模式 (debug/release)
+	ReadTimeout  int    `mapstructure:"read_timeout"`  // 读取超时时间(秒)
+	WriteTimeout int    `mapstructure:"write_timeout"` // 写入超时时间(秒)
+	EnableHTTP2  bool   `mapstructure:"enable_http2"`  // 是否启用HTTP/2
+	EnableHTTPS  bool   `mapstructure:"enable_https"`  // 是否启用HTTPS
+	TLSCertFile  string `mapstructure:"tls_cert_file"` // TLS证书文件路径
+	TLSKeyFile   string `mapstructure:"tls_key_file"`  // TLS私钥文件路径
 }
 
 // DatabaseConfig 数据库配置

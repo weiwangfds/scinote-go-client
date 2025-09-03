@@ -79,7 +79,7 @@ func (e *AppError) Error() string {
 
 // WithDetails 添加详细错误信息
 // @Description 为错误添加详细信息
-// @Param details 详细错误信息
+// @Param details query string true "详细错误信息"
 // @Return 带详细信息的错误
 func (e *AppError) WithDetails(details string) *AppError {
 	e.Details = details
@@ -88,7 +88,7 @@ func (e *AppError) WithDetails(details string) *AppError {
 
 // WithOriginalError 添加原始错误
 // @Description 为错误添加原始错误信息
-// @Param err 原始错误
+// @Param err query string true "原始错误"
 // @Return 带原始错误的错误
 func (e *AppError) WithOriginalError(err error) *AppError {
 	e.OriginalError = err
@@ -100,8 +100,8 @@ func (e *AppError) WithOriginalError(err error) *AppError {
 
 // New 创建新的应用错误
 // @Description 创建新的应用程序错误
-// @Param code 错误码
-// @Param message 错误消息
+// @Param code query int true "错误码"
+// @Param message query string true "错误消息"
 // @Return 应用错误实例
 func New(code ErrorCode, message string) *AppError {
 	return &AppError{
@@ -112,9 +112,9 @@ func New(code ErrorCode, message string) *AppError {
 
 // NewWithDetails 创建带详细信息的应用错误
 // @Description 创建带详细信息的应用程序错误
-// @Param code 错误码
-// @Param message 错误消息
-// @Param details 详细错误信息
+// @Param code query int true "错误码"
+// @Param message query string true "错误消息"
+// @Param details query string true "详细错误信息"
 // @Return 应用错误实例
 func NewWithDetails(code ErrorCode, message string, details string) *AppError {
 	return &AppError{
@@ -126,9 +126,9 @@ func NewWithDetails(code ErrorCode, message string, details string) *AppError {
 
 // Wrap 包装原始错误
 // @Description 将原始错误包装为应用程序错误
-// @Param code 错误码
-// @Param message 错误消息
-// @Param err 原始错误
+// @Param code query int true "错误码"
+// @Param message query string true "错误消息"
+// @Param err query string true "原始错误"
 // @Return 应用错误实例
 func Wrap(code ErrorCode, message string, err error) *AppError {
 	appErr := &AppError{
@@ -144,7 +144,7 @@ func Wrap(code ErrorCode, message string, err error) *AppError {
 
 // IsAppError 判断是否为应用错误
 // @Description 判断给定错误是否为应用程序错误类型
-// @Param err 待判断的错误
+// @Param err query string true "待判断的错误"
 // @Return 是否为应用错误
 func IsAppError(err error) bool {
 	_, ok := err.(*AppError)
@@ -153,7 +153,7 @@ func IsAppError(err error) bool {
 
 // GetAppError 获取应用错误
 // @Description 从错误中提取应用程序错误
-// @Param err 原始错误
+// @Param err query string true "原始错误"
 // @Return 应用错误实例和是否成功提取的标志
 func GetAppError(err error) (*AppError, bool) {
 	appErr, ok := err.(*AppError)
@@ -205,7 +205,7 @@ var (
 
 // GetErrorMessage 根据错误码获取错误消息
 // @Description 根据错误码获取对应的错误消息
-// @Param code 错误码
+// @Param code query int true "错误码"
 // @Return 错误消息
 func GetErrorMessage(code ErrorCode) string {
 	errorMessages := map[ErrorCode]string{

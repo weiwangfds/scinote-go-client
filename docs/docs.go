@@ -24,6 +24,920 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/notes": {
+            "post": {
+                "description": "创建一个新的笔记，支持层级结构、标签和扩展属性",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "创建新笔记",
+                "parameters": [
+                    {
+                        "description": "创建笔记请求",
+                        "name": "note",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/note.CreateNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Note"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/batch-move": {
+            "post": {
+                "description": "将多个笔记批量移动到新的父笔记下",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "批量移动笔记",
+                "parameters": [
+                    {
+                        "description": "批量移动笔记请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.BatchMoveNotesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "移动成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/children": {
+            "get": {
+                "description": "获取指定笔记的直接子笔记列表，支持分页",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "获取笔记的子笔记",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.PaginatedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/search": {
+            "get": {
+                "description": "根据关键词搜索笔记，支持分页",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "搜索笔记",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键词",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "搜索成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.PaginatedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/tree": {
+            "get": {
+                "description": "获取完整的笔记树结构，支持指定根节点和最大深度",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "获取笔记树结构",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "根笔记ID，空表示从顶级开始",
+                        "name": "root_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "最大深度，0表示无限制",
+                        "name": "max_depth",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/database.Note"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}": {
+            "get": {
+                "description": "根据笔记ID获取笔记的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "获取笔记详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "是否包含文件内容",
+                        "name": "include_content",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Note"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新笔记的基本信息、内容、标签等",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "更新笔记信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新笔记请求",
+                        "name": "note",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/note.UpdateNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Note"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "软删除笔记，支持级联删除子笔记",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "删除笔记",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "是否级联删除子笔记",
+                        "name": "cascade",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/children": {
+            "get": {
+                "description": "获取指定笔记的直接子笔记列表，支持分页",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "获取笔记的子笔记",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "父笔记ID，空表示获取根笔记",
+                        "name": "id",
+                        "in": "path"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.PaginatedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/move": {
+            "post": {
+                "description": "将笔记移动到新的父笔记下，并设置新的排序位置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "移动笔记",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "移动笔记请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.MoveNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "移动成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/move-tree": {
+            "post": {
+                "description": "移动整个笔记树到新的父笔记下",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "移动笔记树",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "根笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "移动笔记树请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.MoveNoteTreeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "移动成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/properties": {
+            "get": {
+                "description": "获取指定笔记的所有扩展属性",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "获取笔记扩展属性",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/database.NoteProperty"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "为指定笔记设置扩展属性",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "设置笔记扩展属性",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "设置属性请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.SetNotePropertyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "设置成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/tags": {
+            "post": {
+                "description": "为指定笔记添加标签",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "为笔记添加标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "添加标签请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.AddNoteTagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记或标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/notes/{id}/tags/{tag_id}": {
+            "delete": {
+                "description": "从指定笔记移除标签",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "笔记管理"
+                ],
+                "summary": "移除笔记标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "笔记ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签ID",
+                        "name": "tag_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "移除成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "笔记或标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/files": {
             "get": {
                 "description": "分页获取文件列表",
@@ -235,6 +1149,13 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "400": {
+                        "description": "文件ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "404": {
                         "description": "文件不存在",
                         "schema": {
@@ -336,6 +1257,13 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "400": {
+                        "description": "文件ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "404": {
                         "description": "文件不存在",
                         "schema": {
@@ -379,6 +1307,13 @@ const docTemplate = `{
                             "type": "file"
                         }
                     },
+                    "400": {
+                        "description": "文件ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "404": {
                         "description": "文件不存在",
                         "schema": {
@@ -391,6 +1326,563 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags": {
+            "get": {
+                "description": "获取所有标签的分页列表，支持排序",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "获取标签列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码（默认1）",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认20，最大100）",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序字段（name、usage_count、created_at、updated_at，默认created_at）",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向（asc、desc，默认desc）",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.PaginatedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建一个新的标签，标签名称必须唯一",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "创建新标签",
+                "parameters": [
+                    {
+                        "description": "创建标签请求",
+                        "name": "tag",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tag.CreateTagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Tag"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "标签名称已存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags/batch": {
+            "post": {
+                "description": "批量创建多个标签，自动去重和跳过已存在的标签",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "批量创建标签",
+                "parameters": [
+                    {
+                        "description": "批量创建标签请求",
+                        "name": "tags",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.BatchCreateTagsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/database.Tag"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags/popular": {
+            "get": {
+                "description": "获取使用次数最多的标签列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "获取热门标签",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "返回数量限制（默认10，最大100）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/database.Tag"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags/search": {
+            "get": {
+                "description": "根据关键词搜索标签名称和描述",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "搜索标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键词",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码（默认1）",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认20，最大100）",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "搜索成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.PaginatedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags/{id}": {
+            "get": {
+                "description": "根据标签ID获取标签的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "获取标签详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "标签ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Tag"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新标签的名称、颜色或描述信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "更新标签信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "标签ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新标签请求",
+                        "name": "tag",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tag.UpdateTagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/database.Tag"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "标签名称已存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "删除指定的标签，可选择是否强制删除（即使有关联笔记）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "删除标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "标签ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否强制删除（默认false）",
+                        "name": "force",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "标签仍有关联笔记",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tags/{id}/stats": {
+            "get": {
+                "description": "获取标签的详细使用统计信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签管理"
+                ],
+                "summary": "获取标签使用统计",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "标签ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tag.TagUsageStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/handler.APIResponse"
                         }
                     }
                 }
@@ -467,6 +1959,44 @@ const docTemplate = `{
                 }
             }
         },
+        "/oss/configs/active": {
+            "get": {
+                "description": "获取系统中当前处于激活状态的OSS配置信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "获取当前激活的OSS配置",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "未找到激活的配置",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/oss/configs/{id}": {
             "get": {
                 "description": "根据配置ID获取指定的OSS配置详细信息",
@@ -511,71 +2041,1266 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "put": {
+                "description": "根据配置ID更新指定的OSS配置信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "更新OSS配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "OSS配置信息",
+                        "name": "config",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/database.OSSConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "配置不存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "根据配置ID删除指定的OSS配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "删除OSS配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "配置ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "配置不存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/configs/{id}/activate": {
+            "post": {
+                "description": "将指定的OSS配置设置为当前激活状态，同时将其他配置设为非激活状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "激活OSS配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "激活成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "配置ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "配置不存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/configs/{id}/test": {
+            "post": {
+                "description": "测试指定OSS配置的连接是否正常",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "测试OSS配置连接",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "连接测试成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "配置ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "连接测试失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/configs/{id}/toggle": {
+            "post": {
+                "description": "切换指定OSS配置的启用状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS配置管理"
+                ],
+                "summary": "启用/禁用OSS配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "启用状态",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "配置不存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/all": {
+            "post": {
+                "description": "启动从OSS云存储同步所有文件到本地的任务",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "从OSS同步所有文件",
+                "responses": {
+                    "200": {
+                        "description": "同步任务启动成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "同步任务启动失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/batch": {
+            "post": {
+                "description": "将多个指定文件批量同步上传到OSS云存储",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "批量同步文件到OSS",
+                "parameters": [
+                    {
+                        "description": "文件ID列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "file_ids": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "批量同步任务启动成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "批量同步任务启动失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/compare": {
+            "get": {
+                "description": "扫描本地文件表并与OSS云端文件进行对比，返回需要更新的文件和仅存在于云端的文件列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "扫描并对比文件",
+                "responses": {
+                    "200": {
+                        "description": "对比结果",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "扫描对比失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/logs": {
+            "get": {
+                "description": "分页获取OSS文件同步操作的历史日志记录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "获取同步日志",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页数量",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "同步日志列表",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "获取日志失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/retry/{logID}": {
+            "post": {
+                "description": "根据日志ID重新执行失败的OSS同步任务",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "重试失败的同步任务",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "同步日志ID",
+                        "name": "logID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "重试任务启动成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "日志ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "重试任务启动失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/status/{fileID}": {
+            "get": {
+                "description": "根据文件ID获取指定文件的OSS同步状态信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "获取文件同步状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "文件ID",
+                        "name": "fileID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "文件同步状态",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "文件ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "获取状态失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/oss/sync/upload/{fileID}": {
+            "post": {
+                "description": "将指定的单个文件同步上传到OSS云存储",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OSS同步管理"
+                ],
+                "summary": "同步单个文件到OSS",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "文件ID",
+                        "name": "fileID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "同步任务启动成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "文件ID无效",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "同步任务启动失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
             }
         }
     },
     "definitions": {
-        "database.OSSConfig": {
+        "database.FileMetadata": {
             "type": "object",
             "properties": {
-                "access_key": {
-                    "description": "访问密钥ID",
+                "created_at": {
+                    "description": "记录创建时间",
                     "type": "string"
                 },
-                "auto_sync": {
-                    "description": "是否开启自动同步",
-                    "type": "boolean"
+                "file_format": {
+                    "description": "文件格式/扩展名（如：pdf、jpg、txt等）",
+                    "type": "string"
                 },
-                "bucket": {
-                    "description": "存储桶名称",
+                "file_hash": {
+                    "description": "文件内容的SHA256哈希值，用于去重和完整性校验",
+                    "type": "string"
+                },
+                "file_id": {
+                    "description": "文件唯一标识符（UUID格式）",
+                    "type": "string"
+                },
+                "file_name": {
+                    "description": "原始文件名称，最大255字符",
+                    "type": "string"
+                },
+                "file_size": {
+                    "description": "文件大小，单位为字节",
+                    "type": "integer"
+                },
+                "id": {
+                    "description": "主键ID，自增",
+                    "type": "integer"
+                },
+                "modify_count": {
+                    "description": "文件被修改的次数统计",
+                    "type": "integer"
+                },
+                "storage_path": {
+                    "description": "文件在存储系统中的完整路径",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "记录最后更新时间",
+                    "type": "string"
+                },
+                "view_count": {
+                    "description": "文件被查看的次数统计",
+                    "type": "integer"
+                }
+            }
+        },
+        "database.Note": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "description": "子笔记列表，一对多关联",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/database.Note"
+                    }
+                },
+                "cover": {
+                    "description": "封面图片URL或路径",
                     "type": "string"
                 },
                 "created_at": {
                     "description": "创建时间",
                     "type": "string"
                 },
-                "endpoint": {
-                    "description": "自定义端点",
+                "creator_id": {
+                    "description": "创建者ID",
+                    "type": "string"
+                },
+                "file": {
+                    "description": "关联的文件对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/database.FileMetadata"
+                        }
+                    ]
+                },
+                "file_id": {
+                    "description": "关联的文件ID，指向FileMetadata表中的文件内容",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "笔记图标，可以是emoji或图标名称",
                     "type": "string"
                 },
                 "id": {
+                    "description": "主键ID，自增",
                     "type": "integer"
                 },
-                "is_active": {
-                    "description": "是否为当前激活的配置",
+                "is_archived": {
+                    "description": "是否已归档",
                     "type": "boolean"
                 },
-                "is_enabled": {
-                    "description": "是否启用",
+                "is_favorite": {
+                    "description": "是否收藏",
                     "type": "boolean"
                 },
-                "keep_structure": {
-                    "description": "是否保持本地文件结构",
+                "is_public": {
+                    "description": "是否公开可见",
                     "type": "boolean"
                 },
-                "name": {
-                    "description": "配置名称",
+                "level": {
+                    "description": "笔记层级深度，根笔记为0",
+                    "type": "integer"
+                },
+                "note_id": {
+                    "description": "笔记唯一标识符（UUID格式）",
                     "type": "string"
                 },
-                "provider": {
-                    "description": "OSS提供商：aliyun, tencent, qiniu",
+                "parent": {
+                    "description": "父笔记对象，外键关联",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/database.Note"
+                        }
+                    ]
+                },
+                "parent_id": {
+                    "description": "父笔记ID，支持无限层级结构，根笔记为null",
+                    "type": "integer"
+                },
+                "path": {
+                    "description": "笔记的完整路径，用于快速层级查询，格式如：/1/2/3",
                     "type": "string"
                 },
-                "region": {
-                    "description": "区域",
+                "properties": {
+                    "description": "一对多关联扩展属性",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/database.NoteProperty"
+                    }
+                },
+                "sort_order": {
+                    "description": "在同级笔记中的排序顺序",
+                    "type": "integer"
+                },
+                "tags": {
+                    "description": "关联关系",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/database.Tag"
+                    }
+                },
+                "title": {
+                    "description": "笔记标题，最大255字符",
                     "type": "string"
                 },
-                "secret_key": {
-                    "description": "访问密钥Secret（不返回给前端）",
-                    "type": "string"
-                },
-                "sync_path": {
-                    "description": "OSS同步路径前缀",
+                "type": {
+                    "description": "笔记类型：page（页面）、database（数据库）、text（文本）等",
                     "type": "string"
                 },
                 "updated_at": {
-                    "description": "修改时间",
+                    "description": "最后更新时间",
                     "type": "string"
+                },
+                "updater_id": {
+                    "description": "最后更新者ID",
+                    "type": "string"
+                },
+                "view_count": {
+                    "description": "笔记被查看次数",
+                    "type": "integer"
+                }
+            }
+        },
+        "database.NoteProperty": {
+            "type": "object",
+            "properties": {
+                "bool_value": {
+                    "description": "布尔类型值",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "date_value": {
+                    "description": "日期类型值",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "主键ID，自增",
+                    "type": "integer"
+                },
+                "json_value": {
+                    "description": "JSON类型值，用于复杂数据结构",
+                    "type": "string"
+                },
+                "note": {
+                    "description": "关联的笔记对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/database.Note"
+                        }
+                    ]
+                },
+                "note_id": {
+                    "description": "关联的笔记ID，外键",
+                    "type": "integer"
+                },
+                "number_value": {
+                    "description": "数字类型值",
+                    "type": "number"
+                },
+                "property_key": {
+                    "description": "属性键名，如：priority、status、due_date等",
+                    "type": "string"
+                },
+                "property_type": {
+                    "description": "属性类型：text、number、date、boolean、select、multi_select等",
+                    "type": "string"
+                },
+                "text_value": {
+                    "description": "文本类型值",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "最后更新时间",
+                    "type": "string"
+                }
+            }
+        },
+        "database.OSSConfig": {
+            "type": "object",
+            "properties": {
+                "access_key": {
+                    "description": "访问密钥ID，用于API认证",
+                    "type": "string"
+                },
+                "auto_sync": {
+                    "description": "是否开启文件自动同步功能",
+                    "type": "boolean"
+                },
+                "bucket": {
+                    "description": "存储桶名称，OSS中的容器名称",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "配置创建时间",
+                    "type": "string"
+                },
+                "endpoint": {
+                    "description": "自定义服务端点URL，可选配置",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "主键ID，自增",
+                    "type": "integer"
+                },
+                "is_active": {
+                    "description": "是否为当前激活使用的配置，系统中只能有一个激活配置",
+                    "type": "boolean"
+                },
+                "is_enabled": {
+                    "description": "配置是否启用，禁用后不可使用",
+                    "type": "boolean"
+                },
+                "keep_structure": {
+                    "description": "同步时是否保持本地文件目录结构",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "配置名称，用于标识不同的OSS配置",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "OSS服务提供商：aliyun（阿里云）、tencent（腾讯云）、qiniu（七牛云）",
+                    "type": "string"
+                },
+                "region": {
+                    "description": "服务区域，如：cn-hangzhou、ap-beijing等",
+                    "type": "string"
+                },
+                "secret_key": {
+                    "description": "访问密钥Secret，敏感信息，API响应时不返回",
+                    "type": "string"
+                },
+                "sync_path": {
+                    "description": "OSS中的同步路径前缀，默认为\"files\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "配置最后修改时间",
+                    "type": "string"
+                }
+            }
+        },
+        "database.Tag": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "description": "标签颜色，支持预定义颜色或十六进制色值",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "标签描述",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "主键ID，自增",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "标签名称，唯一索引",
+                    "type": "string"
+                },
+                "notes": {
+                    "description": "关联关系",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/database.Note"
+                    }
+                },
+                "tag_id": {
+                    "description": "标签唯一标识符（UUID格式）",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "最后更新时间",
+                    "type": "string"
+                },
+                "usage_count": {
+                    "description": "标签使用次数统计",
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.APIResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "响应数据"
+                },
+                "error": {
+                    "description": "错误信息",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "响应消息",
+                    "type": "string"
+                },
+                "success": {
+                    "description": "请求是否成功",
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.AddNoteTagRequest": {
+            "type": "object",
+            "required": [
+                "tag_id"
+            ],
+            "properties": {
+                "tag_id": {
+                    "description": "标签ID",
+                    "type": "string"
+                }
+            }
+        },
+        "handler.BatchCreateTagsRequest": {
+            "type": "object",
+            "required": [
+                "names"
+            ],
+            "properties": {
+                "names": {
+                    "description": "标签名称列表",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handler.BatchMoveNotesRequest": {
+            "type": "object",
+            "required": [
+                "note_ids"
+            ],
+            "properties": {
+                "new_parent_id": {
+                    "description": "新父笔记ID",
+                    "type": "string"
+                },
+                "note_ids": {
+                    "description": "笔记ID列表",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handler.MoveNoteRequest": {
+            "type": "object",
+            "properties": {
+                "new_parent_id": {
+                    "description": "新父笔记ID",
+                    "type": "string"
+                },
+                "new_sort_order": {
+                    "description": "新排序位置",
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.MoveNoteTreeRequest": {
+            "type": "object",
+            "properties": {
+                "new_parent_id": {
+                    "description": "新父笔记ID",
+                    "type": "string"
+                }
+            }
+        },
+        "handler.PaginatedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "数据列表"
+                },
+                "page": {
+                    "description": "当前页码",
+                    "type": "integer"
+                },
+                "page_size": {
+                    "description": "每页数量",
+                    "type": "integer"
+                },
+                "total": {
+                    "description": "总数量",
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "description": "总页数",
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.SetNotePropertyRequest": {
+            "type": "object",
+            "required": [
+                "key",
+                "property_type",
+                "value"
+            ],
+            "properties": {
+                "key": {
+                    "description": "属性键",
+                    "type": "string"
+                },
+                "property_type": {
+                    "description": "属性类型",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "属性值"
+                }
+            }
+        },
+        "note.CreateNoteRequest": {
+            "type": "object",
+            "required": [
+                "creator_id",
+                "title",
+                "type"
+            ],
+            "properties": {
+                "content": {
+                    "description": "笔记内容",
+                    "type": "string"
+                },
+                "cover": {
+                    "description": "封面",
+                    "type": "string"
+                },
+                "creator_id": {
+                    "description": "创建者ID",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "图标",
+                    "type": "string"
+                },
+                "is_favorite": {
+                    "description": "是否收藏",
+                    "type": "boolean"
+                },
+                "is_public": {
+                    "description": "是否公开",
+                    "type": "boolean"
+                },
+                "parent_id": {
+                    "description": "父笔记ID",
+                    "type": "string"
+                },
+                "properties": {
+                    "description": "扩展属性",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "sort_order": {
+                    "description": "排序",
+                    "type": "integer"
+                },
+                "tags": {
+                    "description": "标签ID列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "笔记标题",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "type": {
+                    "description": "笔记类型",
+                    "type": "string"
+                }
+            }
+        },
+        "note.UpdateNoteRequest": {
+            "type": "object",
+            "required": [
+                "updater_id"
+            ],
+            "properties": {
+                "content": {
+                    "description": "笔记内容",
+                    "type": "string"
+                },
+                "cover": {
+                    "description": "封面",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "图标",
+                    "type": "string"
+                },
+                "is_archived": {
+                    "description": "是否归档",
+                    "type": "boolean"
+                },
+                "is_favorite": {
+                    "description": "是否收藏",
+                    "type": "boolean"
+                },
+                "is_public": {
+                    "description": "是否公开",
+                    "type": "boolean"
+                },
+                "properties": {
+                    "description": "扩展属性",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "sort_order": {
+                    "description": "排序",
+                    "type": "integer"
+                },
+                "tags": {
+                    "description": "标签ID列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "笔记标题",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "笔记类型",
+                    "type": "string"
+                },
+                "updater_id": {
+                    "description": "更新者ID",
+                    "type": "string"
+                }
+            }
+        },
+        "tag.CreateTagRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "color": {
+                    "description": "标签颜色",
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "description": {
+                    "description": "标签描述",
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "name": {
+                    "description": "标签名称",
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "tag.TagUsageStats": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "description": "最后使用时间",
+                    "type": "string"
+                },
+                "note_count": {
+                    "description": "关联笔记数量",
+                    "type": "integer"
+                },
+                "tag_id": {
+                    "description": "标签ID",
+                    "type": "string"
+                },
+                "tag_name": {
+                    "description": "标签名称",
+                    "type": "string"
+                },
+                "usage_count": {
+                    "description": "使用次数",
+                    "type": "integer"
+                }
+            }
+        },
+        "tag.UpdateTagRequest": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "description": "标签颜色",
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "description": {
+                    "description": "标签描述",
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "name": {
+                    "description": "标签名称",
+                    "type": "string",
+                    "maxLength": 100
                 }
             }
         }

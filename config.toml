@@ -1,8 +1,13 @@
 [server]
-port = 8080
+# HTTP端口已移除，仅支持HTTPS
+https_port = 8443
 mode = "debug"
 read_timeout = 30
 write_timeout = 30
+enable_http2 = true
+enable_https = true
+tls_cert_file = "./certs/server.crt"
+tls_key_file = "./certs/server.key"
 
 [database]
 driver = "sqlite"

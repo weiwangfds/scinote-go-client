@@ -39,8 +39,6 @@ type PageData struct {
 // Success 成功响应
 // @Summary 返回成功响应
 // @Description 返回成功的API响应
-// @Param c gin上下文
-// @Param data 响应数据
 func Success(c *gin.Context, data interface{}) {
 	response := Response{
 		Code:      0,
@@ -55,9 +53,6 @@ func Success(c *gin.Context, data interface{}) {
 // SuccessWithMessage 带消息的成功响应
 // @Summary 返回带自定义消息的成功响应
 // @Description 返回带自定义消息的成功API响应
-// @Param c gin上下文
-// @Param message 自定义消息
-// @Param data 响应数据
 func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 	response := Response{
 		Code:      0,
@@ -72,11 +67,6 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 // SuccessWithPage 分页成功响应
 // @Summary 返回分页成功响应
 // @Description 返回分页数据的成功API响应
-// @Param c gin上下文
-// @Param list 数据列表
-// @Param total 总数
-// @Param page 当前页码
-// @Param pageSize 每页大小
 func SuccessWithPage(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
@@ -104,9 +94,6 @@ func SuccessWithPage(c *gin.Context, list interface{}, total int64, page, pageSi
 // Error 错误响应
 // @Summary 返回错误响应
 // @Description 返回错误的API响应
-// @Param c gin上下文
-// @Param code 错误码
-// @Param message 错误消息
 func Error(c *gin.Context, code int, message string) {
 	response := Response{
 		Code:      code,
@@ -120,10 +107,6 @@ func Error(c *gin.Context, code int, message string) {
 // ErrorWithData 带数据的错误响应
 // @Summary 返回带数据的错误响应
 // @Description 返回带额外数据的错误API响应
-// @Param c gin上下文
-// @Param code 错误码
-// @Param message 错误消息
-// @Param data 错误相关数据
 func ErrorWithData(c *gin.Context, code int, message string, data interface{}) {
 	response := Response{
 		Code:      code,
@@ -138,8 +121,6 @@ func ErrorWithData(c *gin.Context, code int, message string, data interface{}) {
 // BadRequest 400错误响应
 // @Summary 返回400错误响应
 // @Description 返回请求参数错误的API响应
-// @Param c gin上下文
-// @Param message 错误消息
 func BadRequest(c *gin.Context, message string) {
 	response := Response{
 		Code:      400,
@@ -153,8 +134,6 @@ func BadRequest(c *gin.Context, message string) {
 // Unauthorized 401错误响应
 // @Summary 返回401错误响应
 // @Description 返回未授权的API响应
-// @Param c gin上下文
-// @Param message 错误消息
 func Unauthorized(c *gin.Context, message string) {
 	response := Response{
 		Code:      401,
@@ -168,8 +147,6 @@ func Unauthorized(c *gin.Context, message string) {
 // Forbidden 403错误响应
 // @Summary 返回403错误响应
 // @Description 返回禁止访问的API响应
-// @Param c gin上下文
-// @Param message 错误消息
 func Forbidden(c *gin.Context, message string) {
 	response := Response{
 		Code:      403,
@@ -183,8 +160,6 @@ func Forbidden(c *gin.Context, message string) {
 // NotFound 404错误响应
 // @Summary 返回404错误响应
 // @Description 返回资源未找到的API响应
-// @Param c gin上下文
-// @Param message 错误消息
 func NotFound(c *gin.Context, message string) {
 	response := Response{
 		Code:      404,
@@ -198,8 +173,6 @@ func NotFound(c *gin.Context, message string) {
 // InternalServerError 500错误响应
 // @Summary 返回500错误响应
 // @Description 返回服务器内部错误的API响应
-// @Param c gin上下文
-// @Param message 错误消息
 func InternalServerError(c *gin.Context, message string) {
 	response := Response{
 		Code:      500,
@@ -212,8 +185,6 @@ func InternalServerError(c *gin.Context, message string) {
 
 // getRequestID 获取请求ID
 // @Description 从gin上下文中获取请求ID，用于链路追踪
-// @Param c gin上下文
-// @Return 请求ID字符串
 func getRequestID(c *gin.Context) string {
 	if requestID, exists := c.Get("request_id"); exists {
 		if id, ok := requestID.(string); ok {

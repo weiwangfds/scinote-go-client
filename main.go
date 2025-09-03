@@ -1,6 +1,6 @@
 // @title Scinote Go Client API
 // @version 1.0
-// @description 阿里云OSS文件管理系统 - Go语言实现的文件上传、下载、同步服务
+// @description 文献管理系统
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
@@ -22,14 +22,16 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"crypto/tls"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"golang.org/x/net/http2"
 	"github.com/weiwangfds/scinote/config"
 	"github.com/weiwangfds/scinote/internal/database"
 	"github.com/weiwangfds/scinote/internal/middleware"
@@ -67,19 +69,35 @@ func main() {
 		log.Printf("Failed to start file watcher service: %v", err)
 	}
 
-	// 创建HTTP服务器
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+	// 创建HTTPS服务器（仅支持HTTPS和HTTP/2）
+	var httpsSrv *http.Server
+	if !cfg.Server.EnableHTTPS {
+		log.Fatal("HTTPS必须启用，HTTP支持已被移除")
+	}
+
+	// 创建HTTPS服务器
+	httpsSrv = &http.Server{
+		Addr:         ":" + strconv.Itoa(cfg.Server.HTTPSPort),
 		Handler:      r.GetEngine(),
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		TLSConfig: &tls.Config{
+			NextProtos: []string{"h2", "http/1.1"}, // 支持HTTP/2和HTTP/1.1
+		},
 	}
 
-	// 启动服务器
+	// 如果启用HTTP/2，配置HTTP/2支持
+	if cfg.Server.EnableHTTP2 {
+		if err := http2.ConfigureServer(httpsSrv, &http2.Server{}); err != nil {
+			log.Fatalf("配置HTTP/2失败: %v", err)
+		}
+	}
+
+	// 启动HTTPS服务器
 	go func() {
-		log.Printf("Server starting on port %d", cfg.Server.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+		log.Printf("HTTPS服务器启动在端口 %d (HTTP/2: %v) - HTTP支持已禁用", cfg.Server.HTTPSPort, cfg.Server.EnableHTTP2)
+		if err := httpsSrv.ListenAndServeTLS(cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTPS服务器启动失败: %v", err)
 		}
 	}()
 
@@ -88,7 +106,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	log.Println("正在关闭服务器...")
 
 	// 停止文件监听服务
 	cancelWatcher()
@@ -100,9 +118,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+	// 关闭HTTPS服务器
+	if err := httpsSrv.Shutdown(ctx); err != nil {
+		log.Fatal("HTTPS服务器强制关闭:", err)
 	}
 
-	log.Println("Server exited")
+	log.Println("服务器已退出")
 }
