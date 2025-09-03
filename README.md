@@ -1,10 +1,26 @@
 # Scinote Go Client
 
-一个功能完整的基于Go语言和Gin框架的文件管理与对象存储服务系统，提供文件上传下载、多云存储同步、文件监控等企业级功能。
+一个功能完整的基于Go语言和Gin框架的笔记与文件管理系统，提供笔记管理、文件上传下载、多云存储同步、文件监控等企业级功能。
+
+## 📝 项目简介
+
+Scinote Go Client是一个高性能、可扩展的笔记与文件管理平台，专为个人和团队协作设计。系统不仅支持完整的文件管理功能，还提供了强大的笔记管理、标签系统和属性系统，帮助用户更高效地组织和检索知识资产。
+
+## ✨ 项目亮点
+
+- **事务处理优化**：所有核心业务操作均采用数据库事务管理，确保数据一致性和完整性
+- **模块化架构**：清晰的三层架构设计，易于扩展和维护
+- **多云存储集成**：支持多种云存储服务，实现数据备份和高可用性
+- **实时文件监控**：自动检测文件变化并触发同步操作
+- **完整的笔记生态**：笔记创建、编辑、标签、属性等功能一应俱全
+- **全面的API文档**：提供Swagger文档，方便集成和测试
 
 ## 🚀 功能特性
 
 ### 核心功能
+- **笔记管理系统**: 完整的笔记创建、编辑、删除、搜索功能
+- **标签系统**: 为笔记添加标签，支持多标签管理和标签统计
+- **属性系统**: 为笔记添加自定义属性，支持属性查询和过滤
 - **文件管理系统**: 完整的文件上传、下载、删除、搜索功能
 - **多云存储支持**: 支持阿里云OSS、腾讯云COS、七牛云Kodo
 - **文件同步服务**: 本地与云存储的双向同步
@@ -63,6 +79,9 @@ scinote-go-client/
     └── service/            # 业务逻辑层
         ├── file_service.go         # 文件服务
         ├── file_watcher_service.go # 文件监控服务
+        ├── note_service.go         # 笔记服务
+        ├── tag_service.go          # 标签服务
+        ├── property_service.go     # 属性服务
         ├── oss_aliyun.go          # 阿里云OSS实现
         ├── oss_config_service.go  # OSS配置服务
         ├── oss_interface.go       # OSS接口定义
@@ -141,6 +160,29 @@ curl http://localhost:8080/api/v1/db/status
 - `GET /api/v1/info` - 服务信息
 - `GET /api/v1/db/status` - 数据库状态检查
 - `GET /swagger/index.html` - API文档
+
+### 笔记管理接口
+
+#### 笔记操作
+- `POST /api/v1/notes` - 创建笔记
+- `GET /api/v1/notes/:id` - 获取笔记详情
+- `PUT /api/v1/notes/:id` - 更新笔记
+- `DELETE /api/v1/notes/:id` - 删除笔记
+- `GET /api/v1/notes` - 获取笔记列表
+- `GET /api/v1/notes/search` - 搜索笔记
+
+#### 标签管理
+- `POST /api/v1/notes/:id/tags` - 为笔记添加标签
+- `GET /api/v1/notes/:id/tags` - 获取笔记标签
+- `DELETE /api/v1/notes/:id/tags/:tag_id` - 删除笔记标签
+- `GET /api/v1/tags` - 获取所有标签
+- `GET /api/v1/tags/stats` - 获取标签统计
+
+#### 属性管理
+- `POST /api/v1/notes/:id/properties` - 为笔记添加属性
+- `GET /api/v1/notes/:id/properties` - 获取笔记属性
+- `PUT /api/v1/notes/:id/properties/:property_id` - 更新笔记属性
+- `DELETE /api/v1/notes/:id/properties/:property_id` - 删除笔记属性
 
 ### 文件管理接口
 
@@ -235,9 +277,136 @@ allowed_extensions = [".jpg", ".png", ".pdf", ".doc", ".docx"]
 2. **Service层** (`internal/service/`): 业务逻辑处理，核心功能实现
 3. **Database层** (`internal/database/`): 数据持久化，模型定义
 
+> **提示**: 文档中的流程图使用Mermaid语法绘制，需要在支持Mermaid的Markdown查看器中才能正确显示。建议使用GitHub、VS Code的Markdown Preview Enhanced插件或其他支持Mermaid的工具查看。
+
+### 系统架构流程图
+
+```mermaid
+flowchart TD
+    subgraph 客户端
+        Client[用户客户端]
+    end
+    
+    subgraph 表现层
+        Handler[HTTP Handler]
+        Router[路由管理器]
+    end
+    
+    subgraph 业务逻辑层
+        NoteService[笔记服务]
+        TagService[标签服务]
+        PropertyService[属性服务]
+        FileService[文件服务]
+        OSSyncService[OSS同步服务]
+        FileMonitorService[文件监控服务]
+        TransactionManager[事务管理器]
+    end
+    
+    subgraph 数据访问层
+        DB[(数据库)]
+    end
+    
+    subgraph 外部服务
+        OSSProvider[OSS提供商]
+    end
+    
+    Client -->|HTTP请求| Router
+    Router -->|路由请求| Handler
+    Handler -->|调用服务| NoteService
+    Handler -->|调用服务| TagService
+    Handler -->|调用服务| PropertyService
+    Handler -->|调用服务| FileService
+    Handler -->|调用服务| OSSyncService
+    
+    NoteService -->|事务处理| TransactionManager
+    TagService -->|事务处理| TransactionManager
+    PropertyService -->|事务处理| TransactionManager
+    FileService -->|事务处理| TransactionManager
+    OSSyncService -->|事务处理| TransactionManager
+    
+    TransactionManager -->|数据操作| DB
+    FileMonitorService -->|监控事件| OSSyncService
+    FileService -->|文件操作| OSSProvider
+    OSSyncService -->|同步操作| OSSProvider
+```
+
 ### Service层详细介绍
 
-#### 1. 文件服务 (file_service.go)
+#### 1. 笔记服务 (note_service.go)
+
+**NoteService接口**提供完整的笔记管理功能：
+
+```go
+// NoteService 定义笔记服务接口
+type NoteService interface {
+    // 笔记基础操作
+    CreateNote(title, content string) (*database.Note, error)
+    GetNote(id uint) (*database.Note, error)
+    UpdateNote(id uint, title, content string) (*database.Note, error)
+    DeleteNote(id uint) error
+    ListNotes(page, pageSize int, filters map[string]interface{}) ([]*database.Note, int64, error)
+    SearchNotes(query string, page, pageSize int) ([]*database.Note, int64, error)
+    
+    // 标签相关操作
+    AddNoteTag(noteID, tagID uint) error
+    RemoveNoteTag(noteID, tagID uint) error
+    GetNoteTags(noteID uint) ([]*database.Tag, error)
+    
+    // 属性相关操作
+    SetNoteProperty(noteID uint, key, value string) error
+    GetNoteProperties(noteID uint) ([]*database.NoteProperty, error)
+}```
+
+**主要功能**：
+- 笔记的创建、读取、更新和删除
+- 笔记搜索和分页查询
+- 笔记标签管理
+- 笔记属性管理
+- 事务管理，确保数据一致性
+
+#### 2. 标签服务 (tag_service.go)
+
+**TagService接口**提供标签管理功能：
+
+```go
+// TagService 定义标签服务接口
+type TagService interface {
+    CreateTag(name string) (*database.Tag, error)
+    GetTag(id uint) (*database.Tag, error)
+    GetTagByName(name string) (*database.Tag, error)
+    ListTags() ([]*database.Tag, error)
+    DeleteTag(id uint) error
+    GetTagStats() ([]*TagStat, error)
+}```
+
+**主要功能**：
+- 标签的创建和管理
+- 标签查询和统计
+- 标签与笔记的关联管理
+- 标签使用频率统计
+
+#### 3. 属性服务 (property_service.go)
+
+**PropertyService接口**提供笔记属性管理功能：
+
+```go
+// PropertyService 定义属性服务接口
+type PropertyService interface {
+    CreateProperty(noteID uint, key, value string) (*database.NoteProperty, error)
+    GetProperty(id uint) (*database.NoteProperty, error)
+    UpdateProperty(id uint, key, value string) (*database.NoteProperty, error)
+    DeleteProperty(id uint) error
+    GetPropertiesByNoteID(noteID uint) ([]*database.NoteProperty, error)
+    SearchByProperty(key, value string) ([]*database.Note, error)
+}```
+
+**主要功能**：
+- 笔记属性的CRUD操作
+- 属性查询和过滤
+- 根据属性搜索笔记
+- 属性值的验证和处理
+
+#### 4. 文件服务 (file_service.go)
 
 **FileService接口**提供完整的文件管理功能：
 
@@ -360,6 +529,48 @@ type OSSyncService interface {
 - 同步日志记录与管理
 - 失败同步的重试机制
 
+### 文件上传与同步时序图
+
+```mermaid
+sequenceDiagram
+    participant Client as 用户客户端
+    participant Handler as 文件Handler
+    participant FileSvc as 文件服务
+    participant SyncSvc as OSS同步服务
+    participant OSS as OSS提供商
+    participant DB as 数据库
+    participant Monitor as 文件监控服务
+    
+    Client->>Handler: POST /api/v1/files/upload
+    Handler->>FileSvc: 处理文件上传
+    FileSvc->>DB: 保存文件元数据
+    DB-->>FileSvc: 返回文件ID
+    FileSvc->>OSS: 上传文件内容
+    OSS-->>FileSvc: 返回上传结果
+    FileSvc-->>Handler: 返回文件信息
+    Handler-->>Client: 返回HTTP响应
+    
+    FileSvc->>SyncSvc: 通知文件变更
+    SyncSvc->>DB: 记录同步日志
+    DB-->>SyncSvc: 返回日志ID
+    
+    Monitor->>Monitor: 检测本地文件变化
+    Monitor->>SyncSvc: 触发同步事件
+    SyncSvc->>FileSvc: 获取文件信息
+    FileSvc->>DB: 查询文件数据
+    DB-->>FileSvc: 返回文件信息
+    FileSvc-->>SyncSvc: 返回文件信息
+    SyncSvc->>OSS: 同步文件到云端
+    OSS-->>SyncSvc: 返回同步结果
+    SyncSvc->>DB: 更新同步状态
+    DB-->>SyncSvc: 返回更新结果
+    
+    SyncSvc->>SyncSvc: 检查同步失败项
+    SyncSvc->>OSS: 重试失败的同步任务
+    OSS-->>SyncSvc: 返回重试结果
+    SyncSvc->>DB: 更新重试日志
+```
+
 #### 6. 云存储提供商实现
 
 **阿里云OSS (oss_aliyun.go)**：
@@ -384,6 +595,162 @@ type OSSyncService interface {
 3. **工厂模式**: OSS提供商的创建使用工厂模式
 4. **策略模式**: 不同的OSS提供商实现相同的接口
 5. **观察者模式**: 文件监控服务的事件处理
+
+### 笔记服务主要操作时序图
+
+```mermaid
+sequenceDiagram
+    participant Client as 用户客户端
+    participant Handler as 笔记Handler
+    participant Service as 笔记Service
+    participant Transaction as 事务管理器
+    participant DB as 数据库
+    
+    Client->>Handler: POST /api/v1/notes
+    Handler->>Handler: 验证请求参数
+    Handler->>Service: 创建笔记
+    Service->>Transaction: 开始事务
+    Transaction->>DB: 执行数据写入
+    DB-->>Transaction: 返回操作结果
+    Transaction-->>Service: 事务提交/回滚
+    Service-->>Handler: 返回笔记信息
+    Handler-->>Client: 返回HTTP响应
+    
+    Client->>Handler: GET /api/v1/notes
+    Handler->>Service: 获取笔记列表
+    Service->>DB: 查询笔记数据
+    DB-->>Service: 返回笔记列表
+    Service-->>Handler: 返回处理后的笔记列表
+    Handler-->>Client: 返回HTTP响应
+    
+    Client->>Handler: PUT /api/v1/notes/{id}
+    Handler->>Service: 更新笔记
+    Service->>Transaction: 开始事务
+    Transaction->>DB: 更新笔记数据
+    DB-->>Transaction: 返回操作结果
+    Transaction-->>Service: 事务提交/回滚
+    Service-->>Handler: 返回更新结果
+    Handler-->>Client: 返回HTTP响应
+    
+    Client->>Handler: DELETE /api/v1/notes/{id}
+    Handler->>Service: 删除笔记
+    Service->>Transaction: 开始事务
+    Transaction->>DB: 软删除笔记
+    DB-->>Transaction: 返回操作结果
+    Transaction-->>Service: 事务提交/回滚
+    Service-->>Handler: 返回删除结果
+    Handler-->>Client: 返回HTTP响应
+```
+
+## 🗄️ 数据模型
+
+### 核心数据模型
+
+#### 1. 笔记模型 (Note)
+
+```go
+// Note 表示系统中的笔记实体
+
+type Note struct {
+    ID          uint      `gorm:"primaryKey" json:"id"`
+    Title       string    `json:"title" binding:"required,min=1,max=255"`
+    Content     string    `json:"content"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+    DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+    
+    // 关联关系
+    Tags        []Tag          `gorm:"many2many:note_tags;foreignKey:ID;references:ID" json:"tags,omitempty"`
+    Properties  []NoteProperty `gorm:"foreignKey:NoteID" json:"properties,omitempty"`
+}
+```
+
+#### 2. 标签模型 (Tag)
+
+```go
+// Tag 表示笔记的标签实体
+
+type Tag struct {
+    ID        uint      `gorm:"primaryKey" json:"id"`
+    Name      string    `gorm:"uniqueIndex" json:"name" binding:"required,min=1,max=50"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+    
+    // 关联关系
+    Notes     []Note    `gorm:"many2many:note_tags;foreignKey:ID;references:ID" json:"notes,omitempty"`
+    UsageCount int       `gorm:"-:all" json:"usage_count"` // 非数据库字段，用于统计
+}
+```
+
+#### 3. 笔记属性模型 (NoteProperty)
+
+```go
+// NoteProperty 表示笔记的扩展属性
+
+type NoteProperty struct {
+    ID        uint      `gorm:"primaryKey" json:"id"`
+    NoteID    uint      `gorm:"index" json:"note_id"`
+    Key       string    `json:"key" binding:"required,min=1,max=50"`
+    Value     string    `json:"value" binding:"required,max=255"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+    
+    // 关联关系
+    Note      Note      `gorm:"foreignKey:NoteID" json:"note,omitempty"`
+}
+```
+
+#### 4. 笔记-标签关联表 (note_tags)
+
+```go
+// 笔记和标签之间是多对多关系，通过中间表关联
+// GORM会自动创建和管理此表
+```
+
+### 数据关系
+
+- **笔记与标签**：多对多关系 (一个笔记可以有多个标签，一个标签可以属于多个笔记)
+- **笔记与属性**：一对多关系 (一个笔记可以有多个属性)
+
+### 标签系统操作流程图
+
+```mermaid
+flowchart TD
+    subgraph 标签管理流程
+        A[创建标签] --> B[查询标签列表]
+        B --> C[获取标签详情]
+        C --> D[更新标签]
+        D --> E[删除标签]
+        E --> F[标签统计]
+    end
+    
+    subgraph 笔记标签关联流程
+        G[为笔记添加标签] --> H[获取笔记关联标签]
+        H --> I[从笔记移除标签]
+        I --> J[基于标签筛选笔记]
+    end
+    
+    subgraph 标签服务核心功能
+        K[标签创建与验证] --> L[标签关系管理]
+        L --> M[标签统计分析]
+        M --> N[标签搜索与过滤]
+    end
+    
+    A --> K
+    B --> N
+    C --> N
+    D --> K
+    E --> K
+    F --> M
+    G --> L
+    H --> L
+    I --> L
+    J --> N
+    
+    style 标签管理流程 fill:#f9f,stroke:#333,stroke-width:1px
+    style 笔记标签关联流程 fill:#bbf,stroke:#333,stroke-width:1px
+    style 标签服务核心功能 fill:#bfb,stroke:#333,stroke-width:1px
+```
 
 ## 🔧 开发指南
 
@@ -501,6 +868,61 @@ go tool cover -html=coverage.out
 
 使用 `examples/api_test.http` 文件进行API测试，或使用curl：
 
+#### 笔记管理测试
+
+```bash
+# 创建笔记
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"title":"测试笔记","content":"这是一个测试笔记的内容"}' \
+  http://localhost:8080/api/v1/notes
+
+# 获取笔记列表
+curl http://localhost:8080/api/v1/notes
+
+# 获取笔记详情（替换{note_id}为实际ID）
+curl http://localhost:8080/api/v1/notes/{note_id}
+
+# 更新笔记
+curl -X PUT -H "Content-Type: application/json" \
+  -d '{"title":"更新后的标题","content":"更新后的内容"}' \
+  http://localhost:8080/api/v1/notes/{note_id}
+
+# 搜索笔记
+curl "http://localhost:8080/api/v1/notes/search?query=测试"
+```
+
+#### 标签管理测试
+
+```bash
+# 为笔记添加标签
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"tag_id":1}' \
+  http://localhost:8080/api/v1/notes/{note_id}/tags
+
+# 获取笔记标签
+curl http://localhost:8080/api/v1/notes/{note_id}/tags
+
+# 删除笔记标签
+curl -X DELETE http://localhost:8080/api/v1/notes/{note_id}/tags/{tag_id}
+
+# 获取所有标签
+curl http://localhost:8080/api/v1/tags
+```
+
+#### 属性管理测试
+
+```bash
+# 为笔记添加属性
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"key":"category","value":"技术笔记"}' \
+  http://localhost:8080/api/v1/notes/{note_id}/properties
+
+# 获取笔记属性
+curl http://localhost:8080/api/v1/notes/{note_id}/properties
+```
+
+#### 文件管理测试
+
 ```bash
 # 上传文件
 curl -X POST -F "file=@test.txt" http://localhost:8080/api/v1/files/upload
@@ -532,6 +954,14 @@ curl -X POST -H "Content-Type: application/json" \
 
 ## 📝 更新日志
 
+### v1.1.0 (2024-02-15)
+- ✨ 新增笔记管理系统，支持笔记的创建、编辑、删除和搜索
+- 🏷️ 新增标签系统，支持为笔记添加标签，以及标签管理和统计
+- 📋 新增属性系统，支持为笔记添加自定义属性
+- 🔧 事务处理优化，为所有核心业务操作添加数据库事务支持
+- 📈 性能优化，提高并发处理能力
+- 📝 完善API文档和使用说明
+
 ### v1.0.0 (2024-01-20)
 - 🎉 初始版本发布
 - ✅ 完整的文件管理功能（上传、下载、删除、搜索）
@@ -560,7 +990,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 - 项目主页: [https://github.com/weiwangfds/scinote-go-client](https://github.com/weiwangfds/scinote-go-client)
 - 问题反馈: [https://github.com/weiwangfds/scinote-go-client/issues](https://github.com/weiwangfds/scinote-go-client/issues)
-- 邮箱: weiwangfds@example.com
+- 邮箱: weiwangfds@163.com
 
 ---
 

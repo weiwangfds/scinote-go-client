@@ -183,17 +183,17 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 		tags := api.Group("/tags")
 		{
 			// 标签基础CRUD操作
-			tags.POST("", tagHandler.CreateTag)                    // 创建标签
-			tags.GET("", tagHandler.GetAllTags)                  // 获取标签列表
-			tags.GET("/:id", tagHandler.GetTag)                  // 获取标签详情
-			tags.PUT("/:id", tagHandler.UpdateTag)               // 更新标签
-			tags.DELETE("/:id", tagHandler.DeleteTag)            // 删除标签
+			tags.POST("", tagHandler.CreateTag)       // 创建标签
+			tags.GET("", tagHandler.GetAllTags)       // 获取标签列表
+			tags.GET("/:id", tagHandler.GetTag)       // 获取标签详情
+			tags.PUT("/:id", tagHandler.UpdateTag)    // 更新标签
+			tags.DELETE("/:id", tagHandler.DeleteTag) // 删除标签
 
 			// 标签搜索和统计
-			tags.GET("/search", tagHandler.SearchTags)           // 搜索标签
-			tags.GET("/popular", tagHandler.GetPopularTags)      // 获取热门标签
-			tags.POST("/batch", tagHandler.BatchCreateTags)      // 批量创建标签
-			tags.GET("/:id/stats", tagHandler.GetTagUsageStats)  // 获取标签使用统计
+			tags.GET("/search", tagHandler.SearchTags)          // 搜索标签
+			tags.GET("/popular", tagHandler.GetPopularTags)     // 获取热门标签
+			tags.POST("/batch", tagHandler.BatchCreateTags)     // 批量创建标签
+			tags.GET("/:id/stats", tagHandler.GetTagUsageStats) // 获取标签使用统计
 		}
 	}
 
