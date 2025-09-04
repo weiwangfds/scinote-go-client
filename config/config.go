@@ -39,9 +39,14 @@ type DatabaseConfig struct {
 
 // LogConfig 日志配置
 type LogConfig struct {
-	Level  string `mapstructure:"level"`
-	Format string `mapstructure:"format"`
-	Output string `mapstructure:"output"`
+	Level      string `mapstructure:"level"`       // 日志级别 (debug, info, warn, error, fatal, panic)
+	Format     string `mapstructure:"format"`      // 日志格式 (json, text)
+	Output     string `mapstructure:"output"`      // 输出方式 (console, file, both)
+	FilePath   string `mapstructure:"file_path"`   // 日志文件路径
+	MaxSize    int    `mapstructure:"max_size"`    // 日志文件最大大小(MB)
+	MaxAge     int    `mapstructure:"max_age"`     // 日志文件保留天数
+	MaxBackups int    `mapstructure:"max_backups"` // 最大备份文件数
+	Compress   bool   `mapstructure:"compress"`    // 是否压缩备份文件
 }
 
 // FileConfig 文件配置

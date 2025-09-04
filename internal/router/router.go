@@ -23,7 +23,7 @@ type Router struct {
 }
 
 // NewRouter 创建路由实例
-func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *config.Config) *Router {
+func NewRouter(db *gorm.DB, cfg *config.Config) *Router {
 	// 设置Gin模式
 	gin.SetMode(gin.ReleaseMode)
 
@@ -50,8 +50,10 @@ func NewRouter(loggerMiddleware *middleware.LoggerMiddleware, db *gorm.DB, cfg *
 
 	// 使用中间件
 	engine.Use(gin.Recovery())
-	engine.Use(loggerMiddleware.Logger())
-	engine.Use(loggerMiddleware.RequestLogger())
+	engine.Use(gin.Logger())
+
+	// 添加请求日志中间件（仅在开发环境生效）
+	engine.Use(middleware.RequestLogger())
 
 	// 配置CORS
 	engine.Use(cors.New(cors.Config{

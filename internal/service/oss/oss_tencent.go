@@ -7,13 +7,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"github.com/weiwangfds/scinote/internal/database"
+	"github.com/weiwangfds/scinote/internal/logger"
 )
 
 // TencentCOSProvider 腾讯云COS提供商实现
@@ -31,41 +31,41 @@ type TencentCOSProvider struct {
 //   *TencentCOSProvider: 腾讯云COS提供商实例
 //   error: 创建过程中的错误信息
 func NewTencentCOSProvider(config *database.OSSConfig) (*TencentCOSProvider, error) {
-	log.Printf("[腾讯云COS] 开始创建COS提供商实例, 存储桶: %s, 区域: %s", config.Bucket, config.Region)
+	logger.Infof("[腾讯云COS] 开始创建COS提供商实例, 存储桶: %s, 区域: %s", config.Bucket, config.Region)
 	
 	// 构建URL
 	bucketURL := fmt.Sprintf("https://%s.cos.%s.myqcloud.com", config.Bucket, config.Region)
 	if config.Endpoint != "" {
-		log.Printf("[腾讯云COS] 使用自定义端点: %s", config.Endpoint)
+		logger.Infof("[腾讯云COS] 使用自定义端点: %s", config.Endpoint)
 		bucketURL = config.Endpoint
 	} else {
-		log.Printf("[腾讯云COS] 使用默认端点: %s", bucketURL)
+		logger.Infof("[腾讯云COS] 使用默认端点: %s", bucketURL)
 	}
 
-	log.Printf("[腾讯云COS] 正在解析存储桶URL: %s", bucketURL)
+	logger.Infof("[腾讯云COS] 正在解析存储桶URL: %s", bucketURL)
 	u, err := url.Parse(bucketURL)
 	if err != nil {
-		log.Printf("[腾讯云COS] 解析存储桶URL失败: %v", err)
+		logger.Errorf("[腾讯云COS] 解析存储桶URL失败: %v", err)
 		return nil, fmt.Errorf("failed to parse bucket URL: %w", err)
 	}
-	log.Println("[腾讯云COS] 存储桶URL解析成功")
+	logger.Info("[腾讯云COS] 存储桶URL解析成功")
 
 	// 创建COS客户端
-	log.Println("[腾讯云COS] 正在创建COS客户端实例")
+	logger.Info("[腾讯云COS] 正在创建COS客户端实例")
 	client := cos.NewClient(&cos.BaseURL{BucketURL: u}, &http.Client{
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  config.AccessKey,
 			SecretKey: config.SecretKey,
 		},
 	})
-	log.Println("[腾讯云COS] COS客户端实例创建成功")
+	logger.Info("[腾讯云COS] COS客户端实例创建成功")
 
 	provider := &TencentCOSProvider{
 		client: client,
 		config: config,
 	}
 	
-	log.Printf("[腾讯云COS] 腾讯云COS提供商实例创建完成, 存储桶: %s", config.Bucket)
+	logger.Infof("[腾讯云COS] 腾讯云COS提供商实例创建完成, 存储桶: %s", config.Bucket)
 	return provider, nil
 }
 
@@ -78,26 +78,26 @@ func NewTencentCOSProvider(config *database.OSSConfig) (*TencentCOSProvider, err
 // 返回:
 //   error: 上传过程中的错误信息
 func (p *TencentCOSProvider) UploadFile(objectKey string, reader io.Reader, contentType string) error {
-	log.Printf("[腾讯云COS] 开始上传文件, 对象键: %s, 内容类型: %s", objectKey, contentType)
+	logger.Infof("[腾讯云COS] 开始上传文件, 对象键: %s, 内容类型: %s", objectKey, contentType)
 	
 	options := &cos.ObjectPutOptions{}
 	if contentType != "" {
-		log.Printf("[腾讯云COS] 设置文件内容类型: %s", contentType)
+		logger.Infof("[腾讯云COS] 设置文件内容类型: %s", contentType)
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{
 			ContentType: contentType,
 		}
 	} else {
-		log.Println("[腾讯云COS] 未指定内容类型，使用默认值")
+		logger.Info("[腾讯云COS] 未指定内容类型，使用默认值")
 	}
 
-	log.Printf("[腾讯云COS] 正在上传文件到COS, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 正在上传文件到COS, 对象键: %s", objectKey)
 	_, err := p.client.Object.Put(context.Background(), objectKey, reader, options)
 	if err != nil {
-		log.Printf("[腾讯云COS] 文件上传失败: %v", err)
+		logger.Errorf("[腾讯云COS] 文件上传失败: %v", err)
 		return fmt.Errorf("failed to upload file to tencent cos: %w", err)
 	}
 
-	log.Printf("[腾讯云COS] 文件上传成功, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 文件上传成功, 对象键: %s", objectKey)
 	return nil
 }
 
@@ -109,16 +109,16 @@ func (p *TencentCOSProvider) UploadFile(objectKey string, reader io.Reader, cont
 //   io.ReadCloser: 文件内容读取器
 //   error: 下载过程中的错误信息
 func (p *TencentCOSProvider) DownloadFile(objectKey string) (io.ReadCloser, error) {
-	log.Printf("[腾讯云COS] 开始下载文件, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 开始下载文件, 对象键: %s", objectKey)
 	
-	log.Printf("[腾讯云COS] 正在从COS下载文件, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 正在从COS下载文件, 对象键: %s", objectKey)
 	resp, err := p.client.Object.Get(context.Background(), objectKey, nil)
 	if err != nil {
-		log.Printf("[腾讯云COS] 文件下载失败: %v", err)
+		logger.Errorf("[腾讯云COS] 文件下载失败: %v", err)
 		return nil, fmt.Errorf("failed to download file from tencent cos: %w", err)
 	}
 
-	log.Printf("[腾讯云COS] 文件下载成功, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 文件下载成功, 对象键: %s", objectKey)
 	return resp.Body, nil
 }
 
@@ -129,16 +129,16 @@ func (p *TencentCOSProvider) DownloadFile(objectKey string) (io.ReadCloser, erro
 // 返回:
 //   error: 删除过程中的错误信息
 func (p *TencentCOSProvider) DeleteFile(objectKey string) error {
-	log.Printf("[腾讯云COS] 开始删除文件, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 开始删除文件, 对象键: %s", objectKey)
 	
-	log.Printf("[腾讯云COS] 正在从COS删除文件, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 正在从COS删除文件, 对象键: %s", objectKey)
 	_, err := p.client.Object.Delete(context.Background(), objectKey)
 	if err != nil {
-		log.Printf("[腾讯云COS] 文件删除失败: %v", err)
+		logger.Errorf("[腾讯云COS] 文件删除失败: %v", err)
 		return fmt.Errorf("failed to delete file from tencent cos: %w", err)
 	}
 
-	log.Printf("[腾讯云COS] 文件删除成功, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 文件删除成功, 对象键: %s", objectKey)
 	return nil
 }
 
@@ -150,20 +150,20 @@ func (p *TencentCOSProvider) DeleteFile(objectKey string) error {
 //   bool: 文件是否存在
 //   error: 检查过程中的错误信息
 func (p *TencentCOSProvider) FileExists(objectKey string) (bool, error) {
-	log.Printf("[腾讯云COS] 开始检查文件是否存在, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 开始检查文件是否存在, 对象键: %s", objectKey)
 	
-	log.Printf("[腾讯云COS] 正在检查文件存在性, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 正在检查文件存在性, 对象键: %s", objectKey)
 	_, err := p.client.Object.Head(context.Background(), objectKey, nil)
 	if err != nil {
 		if cos.IsNotFoundError(err) {
-			log.Printf("[腾讯云COS] 文件不存在, 对象键: %s", objectKey)
+			logger.Infof("[腾讯云COS] 文件不存在, 对象键: %s", objectKey)
 			return false, nil
 		}
-		log.Printf("[腾讯云COS] 检查文件存在性失败: %v", err)
+		logger.Errorf("[腾讯云COS] 检查文件存在性失败: %v", err)
 		return false, fmt.Errorf("failed to check file existence in tencent cos: %w", err)
 	}
 
-	log.Printf("[腾讯云COS] 文件存在, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 文件存在, 对象键: %s", objectKey)
 	return true, nil
 }
 
@@ -175,12 +175,12 @@ func (p *TencentCOSProvider) FileExists(objectKey string) (bool, error) {
 //   *FileInfo: 文件信息结构体
 //   error: 获取过程中的错误信息
 func (p *TencentCOSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
-	log.Printf("[腾讯云COS] 开始获取文件信息, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 开始获取文件信息, 对象键: %s", objectKey)
 	
-	log.Printf("[腾讯云COS] 正在获取文件元数据, 对象键: %s", objectKey)
+	logger.Infof("[腾讯云COS] 正在获取文件元数据, 对象键: %s", objectKey)
 	resp, err := p.client.Object.Head(context.Background(), objectKey, nil)
 	if err != nil {
-		log.Printf("[腾讯云COS] 获取文件信息失败: %v", err)
+		logger.Errorf("[腾讯云COS] 获取文件信息失败: %v", err)
 		return nil, fmt.Errorf("failed to get file info from tencent cos: %w", err)
 	}
 
@@ -192,7 +192,7 @@ func (p *TencentCOSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 		ContentType:  resp.Header.Get("Content-Type"),
 	}
 	
-	log.Printf("[腾讯云COS] 文件信息获取成功, 对象键: %s, 大小: %d, 类型: %s", 
+	logger.Infof("[腾讯云COS] 文件信息获取成功, 对象键: %s, 大小: %d bytes, 内容类型: %s", 
 		objectKey, fileInfo.Size, fileInfo.ContentType)
 	return fileInfo, nil
 }
@@ -206,22 +206,22 @@ func (p *TencentCOSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 //   []FileInfo: 文件信息列表
 //   error: 列出过程中的错误信息
 func (p *TencentCOSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, error) {
-	log.Printf("[腾讯云COS] 开始列出文件, 前缀: %s, 最大数量: %d", prefix, maxKeys)
+	logger.Infof("[腾讯云COS] 开始列出文件, 前缀: %s, 最大数量: %d", prefix, maxKeys)
 	
 	options := &cos.BucketGetOptions{
 		Prefix:  prefix,
 		MaxKeys: maxKeys,
 	}
 
-	log.Printf("[腾讯云COS] 正在从COS获取文件列表, 前缀: %s", prefix)
+	logger.Infof("[腾讯云COS] 正在从COS获取文件列表, 前缀: %s", prefix)
 	result, _, err := p.client.Bucket.Get(context.Background(), options)
 	if err != nil {
-		log.Printf("[腾讯云COS] 获取文件列表失败: %v", err)
+		logger.Errorf("[腾讯云COS] 获取文件列表失败: %v", err)
 		return nil, fmt.Errorf("failed to list files from tencent cos: %w", err)
 	}
 
 	var files []FileInfo
-	log.Printf("[腾讯云COS] 正在处理文件列表, 共找到 %d 个文件", len(result.Contents))
+	logger.Infof("[腾讯云COS] 正在处理文件列表, 共找到 %d 个文件", len(result.Contents))
 	for _, object := range result.Contents {
 		files = append(files, FileInfo{
 			Key:          object.Key,
@@ -232,7 +232,7 @@ func (p *TencentCOSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, 
 		})
 	}
 
-	log.Printf("[腾讯云COS] 文件列表获取成功, 返回 %d 个文件", len(files))
+	logger.Infof("[腾讯云COS] 文件列表获取成功, 返回 %d 个文件", len(files))
 	return files, nil
 }
 
@@ -241,16 +241,16 @@ func (p *TencentCOSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, 
 // 返回:
 //   error: 连接测试过程中的错误信息
 func (p *TencentCOSProvider) TestConnection() error {
-	log.Printf("[腾讯云COS] 开始测试COS连接, 存储桶: %s", p.config.Bucket)
+	logger.Infof("[腾讯云COS] 开始测试COS连接, 存储桶: %s", p.config.Bucket)
 	
 	// 尝试获取存储桶信息
-	log.Printf("[腾讯云COS] 正在获取存储桶信息进行连接测试, 存储桶: %s", p.config.Bucket)
+	logger.Infof("[腾讯云COS] 正在获取存储桶信息进行连接测试, 存储桶: %s", p.config.Bucket)
 	_, err := p.client.Bucket.Head(context.Background())
 	if err != nil {
-		log.Printf("[腾讯云COS] COS连接测试失败: %v", err)
+		logger.Errorf("[腾讯云COS] COS连接测试失败: %v", err)
 		return fmt.Errorf("failed to test tencent cos connection: %w", err)
 	}
 
-	log.Printf("[腾讯云COS] COS连接测试成功, 存储桶: %s", p.config.Bucket)
+	logger.Infof("[腾讯云COS] COS连接测试成功, 存储桶: %s", p.config.Bucket)
 	return nil
 }

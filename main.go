@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,7 +33,7 @@ import (
 	"golang.org/x/net/http2"
 	"github.com/weiwangfds/scinote/config"
 	"github.com/weiwangfds/scinote/internal/database"
-	"github.com/weiwangfds/scinote/internal/middleware"
+	"github.com/weiwangfds/scinote/internal/logger"
 	"github.com/weiwangfds/scinote/internal/router"
 	ossservice "github.com/weiwangfds/scinote/internal/service/oss"
 	watcherservice "github.com/weiwangfds/scinote/internal/service/watcher"
@@ -44,35 +43,47 @@ func main() {
 	// 加载配置
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Fatalf("Failed to load config: %v", err)
+	}
+
+	// 初始化日志系统
+	loggerConfig := &logger.Config{
+		Level:      cfg.Log.Level,
+		Format:     cfg.Log.Format,
+		Output:     cfg.Log.Output,
+		FilePath:   cfg.Log.FilePath,
+		MaxSize:    cfg.Log.MaxSize,
+		MaxAge:     cfg.Log.MaxAge,
+		MaxBackups: cfg.Log.MaxBackups,
+		Compress:   cfg.Log.Compress,
+	}
+	if err := logger.Init(loggerConfig); err != nil {
+		logger.Fatalf("Failed to initialize logger: %v", err)
 	}
 
 	// 初始化数据库
 	db, err := database.Init(cfg.Database)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.Fatalf("Failed to initialize database: %v", err)
 	}
-
-	// 初始化中间件
-	loggerMiddleware := middleware.NewLoggerMiddleware()
 
 	// 初始化文件监听服务
 	ossConfigService := ossservice.NewOSSConfigService(db)
 	fileWatcherService := watcherservice.NewFileWatcherService(db, ossConfigService)
 
 	// 初始化路由
-	r := router.NewRouter(loggerMiddleware, db, cfg)
+	r := router.NewRouter(db, cfg)
 
 	// 启动文件监听服务
 	watcherCtx, cancelWatcher := context.WithCancel(context.Background())
 	if err := fileWatcherService.Start(watcherCtx); err != nil {
-		log.Printf("Failed to start file watcher service: %v", err)
+		logger.Errorf("Failed to start file watcher service: %v", err)
 	}
 
 	// 创建HTTPS服务器（仅支持HTTPS和HTTP/2）
 	var httpsSrv *http.Server
 	if !cfg.Server.EnableHTTPS {
-		log.Fatal("HTTPS必须启用，HTTP支持已被移除")
+		logger.Fatal("HTTPS必须启用，HTTP支持已被移除")
 	}
 
 	// 创建HTTPS服务器
@@ -89,15 +100,15 @@ func main() {
 	// 如果启用HTTP/2，配置HTTP/2支持
 	if cfg.Server.EnableHTTP2 {
 		if err := http2.ConfigureServer(httpsSrv, &http2.Server{}); err != nil {
-			log.Fatalf("配置HTTP/2失败: %v", err)
+			logger.Fatalf("配置HTTP/2失败: %v", err)
 		}
 	}
 
 	// 启动HTTPS服务器
 	go func() {
-		log.Printf("HTTPS服务器启动在端口 %d (HTTP/2: %v) - HTTP支持已禁用", cfg.Server.HTTPSPort, cfg.Server.EnableHTTP2)
+		logger.Infof("HTTPS服务器启动在端口 %d (HTTP/2: %v) - HTTP支持已禁用", cfg.Server.HTTPSPort, cfg.Server.EnableHTTP2)
 		if err := httpsSrv.ListenAndServeTLS(cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTPS服务器启动失败: %v", err)
+			logger.Fatalf("HTTPS服务器启动失败: %v", err)
 		}
 	}()
 
@@ -106,12 +117,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("正在关闭服务器...")
+	logger.Info("正在关闭服务器...")
 
 	// 停止文件监听服务
 	cancelWatcher()
 	if err := fileWatcherService.Stop(); err != nil {
-		log.Printf("Error stopping file watcher service: %v", err)
+		logger.Errorf("Error stopping file watcher service: %v", err)
 	}
 
 	// 优雅关闭服务器
@@ -120,8 +131,8 @@ func main() {
 
 	// 关闭HTTPS服务器
 	if err := httpsSrv.Shutdown(ctx); err != nil {
-		log.Fatal("HTTPS服务器强制关闭:", err)
+		logger.Fatal("HTTPS服务器强制关闭:", err)
 	}
 
-	log.Println("服务器已退出")
+	logger.Info("服务器已退出")
 }

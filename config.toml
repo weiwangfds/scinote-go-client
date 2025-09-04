@@ -18,8 +18,13 @@ conn_max_lifetime = 3600
 
 [log]
 level = "info"
-format = "json"
-output = "stdout"
+format = "text"
+output = "both"
+file_path = "logs/app.log"
+max_size = 100
+max_age = 30
+max_backups = 10
+compress = true
 
 [file]
 storage_path = "./data/files"

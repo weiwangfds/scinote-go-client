@@ -6,12 +6,10 @@ package note
 import (
 	"errors"
 	"fmt"
-	"log"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/weiwangfds/scinote/internal/database"
+	"github.com/weiwangfds/scinote/internal/logger"
 	fileservice "github.com/weiwangfds/scinote/internal/service/file"
 	"gorm.io/gorm"
 )
@@ -192,7 +190,7 @@ type noteService struct {
 //
 //	NoteService - 笔记服务接口
 func NewNoteService(db *gorm.DB, fileService fileservice.FileService) NoteService {
-	log.Println("Initializing note service")
+	logger.Info("[笔记服务] 初始化笔记服务")
 	return &noteService{
 		db:          db,
 		fileService: fileService,
@@ -201,7 +199,7 @@ func NewNoteService(db *gorm.DB, fileService fileservice.FileService) NoteServic
 
 // CreateNote 创建新笔记
 func (s *noteService) CreateNote(req *CreateNoteRequest) (*database.Note, error) {
-	log.Printf("Creating note: %s", req.Title)
+	logger.Infof("[笔记服务] 创建笔记: %s", req.Title)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -211,72 +209,35 @@ func (s *noteService) CreateNote(req *CreateNoteRequest) (*database.Note, error)
 		}
 	}()
 
-	// 生成笔记ID
-	noteID := uuid.New().String()
-	log.Printf("Generated note ID: %s", noteID)
+	// 数据库将自动生成ID
 
-	// 验证父笔记是否存在
-	var parentNote *database.Note
-	if req.ParentID != nil && *req.ParentID != "" {
-		var parent database.Note
-		if err := tx.Where("note_id = ?", *req.ParentID).First(&parent).Error; err != nil {
-			tx.Rollback()
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, fmt.Errorf("parent note not found: %s", *req.ParentID)
-			}
-			return nil, err
-		}
-		parentNote = &parent
-		log.Printf("Found parent note: %s (ID: %d)", parent.Title, parent.ID)
-	}
+	// 新的Note模型不再支持层级结构验证
 
 	// 创建笔记记录
 	note := &database.Note{
-		NoteID:     noteID,
-		Title:      req.Title,
-		Type:       req.Type,
-		Icon:       req.Icon,
-		Cover:      req.Cover,
-		IsPublic:   req.IsPublic,
-		IsFavorite: req.IsFavorite,
-		SortOrder:  req.SortOrder,
-		CreatorID:  req.CreatorID,
-		UpdaterID:  req.CreatorID,
+		Title:    req.Title,
+		Content:  req.Content,
+		Author:   req.CreatorID,
+		Category: req.Type,
+		IsPublic: req.IsPublic,
 	}
 
-	// 设置父笔记关系和层级信息
-	if parentNote != nil {
-		note.ParentID = &parentNote.ID
-		note.Level = parentNote.Level + 1
-	} else {
-		note.Level = 0
-	}
+	// 注意：新的Note模型不再支持层级结构，如需要可通过Category字段管理
 
 	// 保存笔记到数据库
 	if err := tx.Create(note).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to create note: %v", err)
+		logger.Errorf("[笔记服务] 创建笔记失败: %v", err)
 		return nil, fmt.Errorf("failed to create note: %w", err)
 	}
 
-	// 更新路径（需要使用生成的ID）
-	if parentNote != nil {
-		note.Path = note.BuildPath(parentNote.Path)
-	} else {
-		note.Path = fmt.Sprintf("/%d", note.ID)
-	}
-
-	if err := tx.Model(note).Update("path", note.Path).Error; err != nil {
-		tx.Rollback()
-		log.Printf("Failed to update note path: %v", err)
-		return nil, fmt.Errorf("failed to update note path: %w", err)
-	}
+	// 新的Note模型不再使用Path字段
 
 	// 添加标签
 	if len(req.Tags) > 0 {
 		if err := s.addNoteTags(tx, note.ID, req.Tags); err != nil {
 			tx.Rollback()
-			log.Printf("Failed to add tags to note: %v", err)
+			logger.Errorf("[笔记服务] 为笔记添加标签失败: %v", err)
 			return nil, fmt.Errorf("failed to add tags: %w", err)
 		}
 	}
@@ -285,59 +246,39 @@ func (s *noteService) CreateNote(req *CreateNoteRequest) (*database.Note, error)
 	if len(req.Properties) > 0 {
 		if err := s.setNoteProperties(tx, note.ID, req.Properties); err != nil {
 			tx.Rollback()
-			log.Printf("Failed to set note properties: %v", err)
+			logger.Errorf("[笔记服务] 设置笔记属性失败: %v", err)
 			return nil, fmt.Errorf("failed to set properties: %w", err)
 		}
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit note creation transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交笔记创建事务失败: %v", err)
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// 如果有内容，创建文件（在事务外进行，避免死锁）
-	if req.Content != "" {
-		fileName := fmt.Sprintf("%s.md", req.Title)
-		fileMetadata, err := s.fileService.UploadFile(fileName, strings.NewReader(req.Content))
-		if err != nil {
-			log.Printf("Failed to create file for note content: %v", err)
-			return nil, fmt.Errorf("failed to create file for note content: %w", err)
-		}
+	// 内容已直接存储在Note.Content字段中，无需额外文件处理
 
-		// 关联文件（使用新的事务）
-		if err := s.db.Model(note).Update("file_id", fileMetadata.FileID).Error; err != nil {
-			log.Printf("Failed to associate file with note: %v", err)
-			return nil, fmt.Errorf("failed to associate file with note: %w", err)
-		}
-		note.FileID = &fileMetadata.FileID
-		log.Printf("Created file for note content: %s", fileMetadata.FileID)
-	}
-
-	log.Printf("Note created successfully: %s (ID: %s)", note.Title, note.NoteID)
+	logger.Infof("[笔记服务] 笔记创建成功: %s (ID: %d)", note.Title, note.ID)
 	return note, nil
 }
 
 // GetNoteByID 根据ID获取笔记详情
 func (s *noteService) GetNoteByID(noteID string, includeContent bool) (*database.Note, error) {
-	log.Printf("Getting note by ID: %s (include content: %v)", noteID, includeContent)
+	logger.Infof("[笔记服务] 根据ID获取笔记: %s (包含内容: %v)", noteID, includeContent)
 
 	var note database.Note
-	query := s.db.Where("note_id = ?", noteID)
+	query := s.db.Where("id = ?", noteID)
 
 	// 预加载关联数据
-	if includeContent {
-		query = query.Preload("File").Preload("Tags").Preload("Properties")
-	} else {
-		query = query.Preload("Tags").Preload("Properties")
-	}
+	query = query.Preload("Tags").Preload("Properties")
 
 	if err := query.First(&note).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("Note not found: %s", noteID)
+			logger.Errorf("[笔记服务] 笔记不存在: %s", noteID)
 			return nil, fmt.Errorf("note not found: %s", noteID)
 		}
-		log.Printf("Failed to get note %s: %v", noteID, err)
+		logger.Errorf("[笔记服务] 获取笔记失败 %s: %v", noteID, err)
 		return nil, err
 	}
 
@@ -346,13 +287,13 @@ func (s *noteService) GetNoteByID(noteID string, includeContent bool) (*database
 		s.db.Model(&note).Update("view_count", gorm.Expr("view_count + 1"))
 	}()
 
-	log.Printf("Found note: %s (Title: %s)", noteID, note.Title)
+	logger.Infof("[笔记服务] 找到笔记: %s (标题: %s)", noteID, note.Title)
 	return &note, nil
 }
 
 // UpdateNote 更新笔记信息
 func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*database.Note, error) {
-	log.Printf("Updating note: %s", noteID)
+	logger.Infof("[笔记服务] 更新笔记: %s", noteID)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -364,7 +305,7 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 
 	// 获取现有笔记
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("note not found: %s", noteID)
@@ -405,41 +346,13 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 	// 更新笔记基本信息
 	if err := tx.Model(&note).Updates(updates).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to update note %s: %v", noteID, err)
+		logger.Errorf("[笔记服务] 更新笔记失败 %s: %v", noteID, err)
 		return nil, fmt.Errorf("failed to update note: %w", err)
 	}
 
-	// 更新内容文件
+	// 更新内容
 	if req.Content != nil {
-		if note.FileID != nil {
-			// 更新现有文件
-			_, err := s.fileService.UpdateFile(*note.FileID, strings.NewReader(*req.Content))
-			if err != nil {
-				tx.Rollback()
-				log.Printf("Failed to update note content file: %v", err)
-				return nil, fmt.Errorf("failed to update note content: %w", err)
-			}
-		} else {
-			// 创建新文件
-			fileName := fmt.Sprintf("%s.md", note.Title)
-			if req.Title != nil {
-				fileName = fmt.Sprintf("%s.md", *req.Title)
-			}
-			fileMetadata, err := s.fileService.UploadFile(fileName, strings.NewReader(*req.Content))
-			if err != nil {
-				tx.Rollback()
-				log.Printf("Failed to create file for note content: %v", err)
-				return nil, fmt.Errorf("failed to create file for note content: %w", err)
-			}
-
-			// 关联文件
-			if err := tx.Model(&note).Update("file_id", fileMetadata.FileID).Error; err != nil {
-				tx.Rollback()
-				log.Printf("Failed to associate file with note: %v", err)
-				return nil, fmt.Errorf("failed to associate file with note: %w", err)
-			}
-			note.FileID = &fileMetadata.FileID
-		}
+		updates["content"] = *req.Content
 	}
 
 	// 更新标签
@@ -447,7 +360,7 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 		// 删除现有标签关联
 		if err := tx.Where("note_id = ?", note.ID).Delete(&database.NoteTag{}).Error; err != nil {
 			tx.Rollback()
-			log.Printf("Failed to remove existing tags: %v", err)
+			logger.Errorf("[笔记服务] 删除现有标签失败: %v", err)
 			return nil, fmt.Errorf("failed to remove existing tags: %w", err)
 		}
 
@@ -455,7 +368,7 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 		if len(req.Tags) > 0 {
 			if err := s.addNoteTags(tx, note.ID, req.Tags); err != nil {
 				tx.Rollback()
-				log.Printf("Failed to add new tags: %v", err)
+				logger.Errorf("Failed to add new tags: %v", err)
 				return nil, fmt.Errorf("failed to add new tags: %w", err)
 			}
 		}
@@ -466,7 +379,7 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 		// 删除现有属性
 		if err := tx.Where("note_id = ?", note.ID).Delete(&database.NoteProperty{}).Error; err != nil {
 			tx.Rollback()
-			log.Printf("Failed to remove existing properties: %v", err)
+			logger.Errorf("Failed to remove existing properties: %v", err)
 			return nil, fmt.Errorf("failed to remove existing properties: %w", err)
 		}
 
@@ -474,7 +387,7 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 		if len(req.Properties) > 0 {
 			if err := s.setNoteProperties(tx, note.ID, req.Properties); err != nil {
 				tx.Rollback()
-				log.Printf("Failed to set new properties: %v", err)
+				logger.Errorf("Failed to set new properties: %v", err)
 				return nil, fmt.Errorf("failed to set new properties: %w", err)
 			}
 		}
@@ -482,24 +395,24 @@ func (s *noteService) UpdateNote(noteID string, req *UpdateNoteRequest) (*databa
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit note update transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交笔记更新事务失败: %v", err)
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	// 重新获取更新后的笔记
 	updatedNote, err := s.GetNoteByID(noteID, false)
 	if err != nil {
-		log.Printf("Failed to get updated note: %v", err)
+		logger.Errorf("[笔记服务] 获取更新后笔记失败: %v", err)
 		return nil, err
 	}
 
-	log.Printf("Note updated successfully: %s", noteID)
+	logger.Infof("[笔记服务] 笔记更新成功: %s", noteID)
 	return updatedNote, nil
 }
 
 // DeleteNote 删除笔记（软删除）
 func (s *noteService) DeleteNote(noteID string, cascade bool) error {
-	log.Printf("Deleting note: %s (cascade: %v)", noteID, cascade)
+	logger.Infof("[笔记服务] 删除笔记: %s (级联: %v)", noteID, cascade)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -511,7 +424,7 @@ func (s *noteService) DeleteNote(noteID string, cascade bool) error {
 
 	// 获取笔记信息
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("note not found: %s", noteID)
@@ -524,15 +437,15 @@ func (s *noteService) DeleteNote(noteID string, cascade bool) error {
 		var childNotes []database.Note
 		if err := tx.Where("parent_id = ?", note.ID).Find(&childNotes).Error; err != nil {
 			tx.Rollback()
-			log.Printf("Failed to find child notes: %v", err)
+			logger.Errorf("[笔记服务] 查找子笔记失败: %v", err)
 			return fmt.Errorf("failed to find child notes: %w", err)
 		}
 
 		for _, child := range childNotes {
-			if err := s.deleteNoteRecursive(tx, child.NoteID); err != nil {
+			if err := s.deleteNoteRecursive(tx, fmt.Sprintf("%d", child.ID)); err != nil {
 				tx.Rollback()
-				log.Printf("Failed to delete child note %s: %v", child.NoteID, err)
-				return fmt.Errorf("failed to delete child note %s: %w", child.NoteID, err)
+				logger.Errorf("[笔记服务] 删除子笔记失败 %d: %v", child.ID, err)
+				return fmt.Errorf("failed to delete child note %d: %w", child.ID, err)
 			}
 		}
 	} else {
@@ -540,7 +453,7 @@ func (s *noteService) DeleteNote(noteID string, cascade bool) error {
 		var childCount int64
 		if err := tx.Model(&database.Note{}).Where("parent_id = ?", note.ID).Count(&childCount).Error; err != nil {
 			tx.Rollback()
-			log.Printf("Failed to count child notes: %v", err)
+			logger.Errorf("[笔记服务] 统计子笔记数量失败: %v", err)
 			return fmt.Errorf("failed to count child notes: %w", err)
 		}
 
@@ -553,17 +466,17 @@ func (s *noteService) DeleteNote(noteID string, cascade bool) error {
 	// 删除笔记本身
 	if err := s.deleteNoteRecursive(tx, noteID); err != nil {
 		tx.Rollback()
-		log.Printf("Failed to delete note %s: %v", noteID, err)
+		logger.Errorf("[笔记服务] 删除笔记失败 %s: %v", noteID, err)
 		return fmt.Errorf("failed to delete note: %w", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit note deletion transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交笔记删除事务失败: %v", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Note deleted successfully: %s", noteID)
+	logger.Infof("[笔记服务] 笔记删除成功: %s", noteID)
 	return nil
 }
 
@@ -571,7 +484,7 @@ func (s *noteService) DeleteNote(noteID string, cascade bool) error {
 func (s *noteService) deleteNoteRecursive(tx *gorm.DB, noteID string) error {
 	// 获取笔记信息
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		return err
 	}
 
@@ -585,15 +498,6 @@ func (s *noteService) deleteNoteRecursive(tx *gorm.DB, noteID string) error {
 		return fmt.Errorf("failed to delete note properties: %w", err)
 	}
 
-	// 删除关联的文件
-	if note.FileID != nil {
-		go func() {
-			if err := s.fileService.DeleteFile(*note.FileID); err != nil {
-				log.Printf("Failed to delete associated file %s: %v", *note.FileID, err)
-			}
-		}()
-	}
-
 	// 软删除笔记记录
 	if err := tx.Delete(&note).Error; err != nil {
 		return fmt.Errorf("failed to delete note record: %w", err)
@@ -604,309 +508,107 @@ func (s *noteService) deleteNoteRecursive(tx *gorm.DB, noteID string) error {
 
 // GetNoteChildren 获取笔记的直接子笔记
 func (s *noteService) GetNoteChildren(noteID string, page, pageSize int) ([]database.Note, int64, error) {
-	log.Printf("Getting children for note: %s (page: %d, size: %d)", noteID, page, pageSize)
+	logger.Infof("[笔记服务] 获取笔记的子笔记: %s (页码: %d, 每页大小: %d)", noteID, page, pageSize)
 
 	var notes []database.Note
 	var total int64
 
 	query := s.db.Model(&database.Note{})
 
-	if noteID == "" {
-		// 获取根笔记
-		query = query.Where("parent_id IS NULL")
-	} else {
-		// 获取指定笔记的子笔记
+	// 新的Note模型不支持层级结构，返回所有笔记
+	if noteID != "" {
+		// 验证笔记是否存在
 		var parentNote database.Note
-		if err := s.db.Where("note_id = ?", noteID).First(&parentNote).Error; err != nil {
+		if err := s.db.Where("id = ?", noteID).First(&parentNote).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, 0, fmt.Errorf("parent note not found: %s", noteID)
 			}
 			return nil, 0, err
 		}
-		query = query.Where("parent_id = ?", parentNote.ID)
 	}
 
 	// 获取总数
 	if err := query.Count(&total).Error; err != nil {
-		log.Printf("Failed to count child notes: %v", err)
+		logger.Errorf("[笔记服务] 统计子笔记数量失败: %v", err)
 		return nil, 0, err
 	}
 
 	// 分页查询
 	offset := (page - 1) * pageSize
-	if err := query.Offset(offset).Limit(pageSize).Order("sort_order ASC, created_at DESC").Find(&notes).Error; err != nil {
-		log.Printf("Failed to get child notes: %v", err)
+	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&notes).Error; err != nil {
+		logger.Errorf("[笔记服务] 获取笔记失败: %v", err)
 		return nil, 0, err
 	}
 
-	log.Printf("Found %d child notes (total: %d)", len(notes), total)
+	logger.Infof("[笔记服务] 找到 %d 个子笔记 (总数: %d)", len(notes), total)
 	return notes, total, nil
 }
 
 // GetNoteTree 获取完整的笔记树结构
 func (s *noteService) GetNoteTree(rootID string, maxDepth int) ([]database.Note, error) {
-	log.Printf("Getting note tree from root: %s (max depth: %d)", rootID, maxDepth)
+	logger.Infof("[笔记服务] 获取笔记树结构，根节点: %s (最大深度: %d)", rootID, maxDepth)
 
 	var notes []database.Note
 	query := s.db.Model(&database.Note{})
 
-	if rootID == "" {
-		// 从根级别开始
-		if maxDepth > 0 {
-			query = query.Where("level <= ?", maxDepth-1)
-		}
-	} else {
-		// 从指定笔记开始
+	if rootID != "" {
+		// 验证根笔记是否存在
 		var rootNote database.Note
-		if err := s.db.Where("note_id = ?", rootID).First(&rootNote).Error; err != nil {
+		if err := s.db.Where("id = ?", rootID).First(&rootNote).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, fmt.Errorf("root note not found: %s", rootID)
 			}
 			return nil, err
 		}
-
-		if maxDepth > 0 {
-			query = query.Where("path LIKE ? AND level <= ?", rootNote.Path+"%", rootNote.Level+maxDepth)
-		} else {
-			query = query.Where("path LIKE ?", rootNote.Path+"%")
-		}
+		// 新的Note模型不支持层级结构，返回单个笔记
+		return []database.Note{rootNote}, nil
 	}
 
-	if err := query.Order("level ASC, sort_order ASC, created_at DESC").Find(&notes).Error; err != nil {
-		log.Printf("Failed to get note tree: %v", err)
+	if err := query.Order("created_at DESC").Find(&notes).Error; err != nil {
+		logger.Errorf("[笔记服务] 获取笔记树失败: %v", err)
 		return nil, err
 	}
 
-	log.Printf("Found %d notes in tree", len(notes))
+	logger.Infof("[笔记服务] 在树中找到 %d 个笔记", len(notes))
 	return notes, nil
 }
 
 // MoveNote 移动单个笔记到新的父笔记下
 func (s *noteService) MoveNote(noteID string, newParentID string, newSortOrder int) error {
-	log.Printf("Moving note %s to parent %s with sort order %d", noteID, newParentID, newSortOrder)
+	logger.Infof("[笔记服务] 移动笔记 %s 到父节点 %s，排序号: %d", noteID, newParentID, newSortOrder)
 
-	// 开始事务
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 获取要移动的笔记
-	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
-		tx.Rollback()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("note not found: %s", noteID)
-		}
-		return err
-	}
-
-	// 验证新父笔记
-	var newParent *database.Note
-	if newParentID != "" {
-		var parent database.Note
-		if err := tx.Where("note_id = ?", newParentID).First(&parent).Error; err != nil {
-			tx.Rollback()
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("new parent note not found: %s", newParentID)
-			}
-			return err
-		}
-		newParent = &parent
-
-		// 检查是否会形成循环引用
-		if strings.Contains(parent.Path, fmt.Sprintf("/%d/", note.ID)) || strings.HasSuffix(parent.Path, fmt.Sprintf("/%d", note.ID)) {
-			tx.Rollback()
-			return fmt.Errorf("cannot move note to its descendant")
-		}
-	}
-
-	// 更新笔记的父级关系
-	updates := map[string]interface{}{
-		"sort_order": newSortOrder,
-		"updated_at": time.Now(),
-	}
-
-	if newParent != nil {
-		updates["parent_id"] = newParent.ID
-		updates["level"] = newParent.Level + 1
-		updates["path"] = note.BuildPath(newParent.Path)
-	} else {
-		updates["parent_id"] = nil
-		updates["level"] = 0
-		updates["path"] = fmt.Sprintf("/%d", note.ID)
-	}
-
-	if err := tx.Model(&note).Updates(updates).Error; err != nil {
-		tx.Rollback()
-		log.Printf("Failed to update note parent: %v", err)
-		return fmt.Errorf("failed to update note parent: %w", err)
-	}
-
-	// 更新所有子笔记的路径和层级
-	if err := s.updateChildrenPaths(tx, note.ID, updates["path"].(string), updates["level"].(int)); err != nil {
-		tx.Rollback()
-		log.Printf("Failed to update children paths: %v", err)
-		return fmt.Errorf("failed to update children paths: %w", err)
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit move transaction: %v", err)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("Note moved successfully: %s", noteID)
+	// 新的Note模型不支持层级结构和移动操作
+	logger.Infof("[笔记服务] 新模型不支持笔记移动操作")
 	return nil
 }
 
 // updateChildrenPaths 递归更新子笔记的路径和层级
 func (s *noteService) updateChildrenPaths(tx *gorm.DB, parentID uint, newParentPath string, newParentLevel int) error {
-	var children []database.Note
-	if err := tx.Where("parent_id = ?", parentID).Find(&children).Error; err != nil {
-		return err
-	}
-
-	for _, child := range children {
-		newPath := fmt.Sprintf("%s/%d", newParentPath, child.ID)
-		newLevel := newParentLevel + 1
-
-		if err := tx.Model(&child).Updates(map[string]interface{}{
-			"path":  newPath,
-			"level": newLevel,
-		}).Error; err != nil {
-			return err
-		}
-
-		// 递归更新子笔记的子笔记
-		if err := s.updateChildrenPaths(tx, child.ID, newPath, newLevel); err != nil {
-			return err
-		}
-	}
-
+	// 新的Note模型不支持层级结构
 	return nil
 }
 
 // BatchMoveNotes 批量移动多个笔记
 func (s *noteService) BatchMoveNotes(noteIDs []string, newParentID string) error {
-	log.Printf("Batch moving %d notes to parent: %s", len(noteIDs), newParentID)
+	logger.Infof("[笔记服务] 批量移动 %d 个笔记到父节点: %s", len(noteIDs), newParentID)
 
-	// 开始事务
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 验证新父笔记
-	var newParent *database.Note
-	if newParentID != "" {
-		var parent database.Note
-		if err := tx.Where("note_id = ?", newParentID).First(&parent).Error; err != nil {
-			tx.Rollback()
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("new parent note not found: %s", newParentID)
-			}
-			return err
-		}
-		newParent = &parent
-	}
-
-	// 获取目标父笔记下的最大排序值
-	var maxSortOrder int
-	if newParent != nil {
-		tx.Model(&database.Note{}).Where("parent_id = ?", newParent.ID).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSortOrder)
-	} else {
-		tx.Model(&database.Note{}).Where("parent_id IS NULL").Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSortOrder)
-	}
-
-	// 逐个移动笔记
-	for i, noteID := range noteIDs {
-		// 获取笔记
-		var note database.Note
-		if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
-			tx.Rollback()
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				log.Printf("Note not found during batch move: %s", noteID)
-				continue // 跳过不存在的笔记
-			}
-			return err
-		}
-
-		// 检查循环引用
-		if newParent != nil {
-			if strings.Contains(newParent.Path, fmt.Sprintf("/%d/", note.ID)) || strings.HasSuffix(newParent.Path, fmt.Sprintf("/%d", note.ID)) {
-				log.Printf("Skipping note %s to avoid circular reference", noteID)
-				continue
-			}
-		}
-
-		// 更新笔记
-		updates := map[string]interface{}{
-			"sort_order": maxSortOrder + i + 1,
-			"updated_at": time.Now(),
-		}
-
-		if newParent != nil {
-			updates["parent_id"] = newParent.ID
-			updates["level"] = newParent.Level + 1
-			updates["path"] = note.BuildPath(newParent.Path)
-		} else {
-			updates["parent_id"] = nil
-			updates["level"] = 0
-			updates["path"] = fmt.Sprintf("/%d", note.ID)
-		}
-
-		if err := tx.Model(&note).Updates(updates).Error; err != nil {
-			tx.Rollback()
-			log.Printf("Failed to update note %s during batch move: %v", noteID, err)
-			return fmt.Errorf("failed to update note %s: %w", noteID, err)
-		}
-
-		// 更新子笔记路径
-		if err := s.updateChildrenPaths(tx, note.ID, updates["path"].(string), updates["level"].(int)); err != nil {
-			tx.Rollback()
-			log.Printf("Failed to update children paths for note %s: %v", noteID, err)
-			return fmt.Errorf("failed to update children paths for note %s: %w", noteID, err)
-		}
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit batch move transaction: %v", err)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("Batch move completed successfully for %d notes", len(noteIDs))
+	// 新的Note模型不支持批量移动操作
+	logger.Infof("[笔记服务] 新模型不支持批量移动操作")
 	return nil
 }
 
 // MoveNoteTree 移动整个笔记树
 func (s *noteService) MoveNoteTree(rootNoteID string, newParentID string) error {
-	log.Printf("Moving note tree with root: %s to parent: %s", rootNoteID, newParentID)
+	logger.Infof("[笔记服务] 移动笔记树，根节点: %s 到父节点: %s", rootNoteID, newParentID)
 
-	// 获取树中的所有笔记
-	treeNotes, err := s.GetNoteTree(rootNoteID, 0)
-	if err != nil {
-		log.Printf("Failed to get note tree: %v", err)
-		return fmt.Errorf("failed to get note tree: %w", err)
-	}
-
-	if len(treeNotes) == 0 {
-		return fmt.Errorf("note tree not found: %s", rootNoteID)
-	}
-
-	// 只移动根笔记，子笔记会自动跟随
-	rootNote := treeNotes[0]
-	return s.MoveNote(rootNote.NoteID, newParentID, 0)
+	// 新的Note模型不支持树移动操作
+	logger.Infof("[笔记服务] 新模型不支持树移动操作")
+	return nil
 }
 
 // SearchNotes 搜索笔记
 func (s *noteService) SearchNotes(query string, page, pageSize int) ([]database.Note, int64, error) {
-	log.Printf("Searching notes with query: '%s' (page: %d, size: %d)", query, page, pageSize)
+	logger.Infof("[笔记服务] 搜索笔记，查询: '%s' (页码: %d, 每页大小: %d)", query, page, pageSize)
 
 	var notes []database.Note
 	var total int64
@@ -916,24 +618,24 @@ func (s *noteService) SearchNotes(query string, page, pageSize int) ([]database.
 
 	// 获取总数
 	if err := dbQuery.Count(&total).Error; err != nil {
-		log.Printf("Failed to count search results: %v", err)
+		logger.Errorf("[笔记服务] 统计搜索结果数量失败: %v", err)
 		return nil, 0, err
 	}
 
 	// 分页查询
 	offset := (page - 1) * pageSize
 	if err := dbQuery.Offset(offset).Limit(pageSize).Order("updated_at DESC").Find(&notes).Error; err != nil {
-		log.Printf("Failed to search notes: %v", err)
+		logger.Errorf("[笔记服务] 搜索笔记失败: %v", err)
 		return nil, 0, err
 	}
 
-	log.Printf("Found %d notes matching query (total: %d)", len(notes), total)
+	logger.Infof("[笔记服务] 找到 %d 个匹配查询的笔记 (总数: %d)", len(notes), total)
 	return notes, total, nil
 }
 
 // AddNoteTag 添加笔记标签
 func (s *noteService) AddNoteTag(noteID string, tagID string) error {
-	log.Printf("Adding tag %s to note %s", tagID, noteID)
+	logger.Infof("[笔记服务] 为笔记添加标签 %s 到笔记 %s", tagID, noteID)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -945,7 +647,7 @@ func (s *noteService) AddNoteTag(noteID string, tagID string) error {
 
 	// 获取笔记
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("note not found: %s", noteID)
@@ -955,7 +657,7 @@ func (s *noteService) AddNoteTag(noteID string, tagID string) error {
 
 	// 获取标签
 	var tag database.Tag
-	if err := tx.Where("tag_id = ?", tagID).First(&tag).Error; err != nil {
+	if err := tx.Where("id = ?", tagID).First(&tag).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("tag not found: %s", tagID)
@@ -976,32 +678,32 @@ func (s *noteService) AddNoteTag(noteID string, tagID string) error {
 		TagID:  tag.ID,
 	}
 
-	if err := tx.Create(noteTag).Error; err != nil {
+	if err := tx.Create(&noteTag).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to create note-tag association: %v", err)
+		logger.Errorf("[笔记服务] 创建笔记-标签关联失败: %v", err)
 		return fmt.Errorf("failed to add tag to note: %w", err)
 	}
 
 	// 增加标签使用次数
 	if err := tx.Model(&tag).Update("usage_count", gorm.Expr("usage_count + 1")).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to increment tag usage count: %v", err)
+		logger.Errorf("[笔记服务] 增加标签使用次数失败: %v", err)
 		return fmt.Errorf("failed to update tag usage count: %w", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit add note tag transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交添加笔记标签事务失败: %v", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Tag added to note successfully: %s -> %s", tagID, noteID)
+	logger.Infof("[笔记服务] 标签添加到笔记成功: %s -> %s", tagID, noteID)
 	return nil
 }
 
 // RemoveNoteTag 移除笔记标签
 func (s *noteService) RemoveNoteTag(noteID string, tagID string) error {
-	log.Printf("Removing tag %s from note %s", tagID, noteID)
+	logger.Infof("[笔记服务] 从笔记移除标签 %s 从笔记 %s", tagID, noteID)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -1013,7 +715,7 @@ func (s *noteService) RemoveNoteTag(noteID string, tagID string) error {
 
 	// 获取笔记和标签
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("note not found: %s", noteID)
@@ -1022,7 +724,7 @@ func (s *noteService) RemoveNoteTag(noteID string, tagID string) error {
 	}
 
 	var tag database.Tag
-	if err := tx.Where("tag_id = ?", tagID).First(&tag).Error; err != nil {
+	if err := tx.Where("id = ?", tagID).First(&tag).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("tag not found: %s", tagID)
@@ -1034,7 +736,7 @@ func (s *noteService) RemoveNoteTag(noteID string, tagID string) error {
 	result := tx.Where("note_id = ? AND tag_id = ?", note.ID, tag.ID).Delete(&database.NoteTag{})
 	if result.Error != nil {
 		tx.Rollback()
-		log.Printf("Failed to remove note-tag association: %v", result.Error)
+		logger.Errorf("[笔记服务] 移除笔记-标签关联失败: %v", result.Error)
 		return fmt.Errorf("failed to remove tag from note: %w", result.Error)
 	}
 
@@ -1046,23 +748,23 @@ func (s *noteService) RemoveNoteTag(noteID string, tagID string) error {
 	// 减少标签使用次数
 	if err := tx.Model(&tag).Update("usage_count", gorm.Expr("CASE WHEN usage_count > 0 THEN usage_count - 1 ELSE 0 END")).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to decrement tag usage count: %v", err)
+		logger.Errorf("[笔记服务] 减少标签使用次数失败: %v", err)
 		return fmt.Errorf("failed to update tag usage count: %w", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit remove note tag transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交移除笔记标签事务失败: %v", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Tag removed from note successfully: %s -> %s", tagID, noteID)
+	logger.Infof("[笔记服务] 标签从笔记移除成功: %s -> %s", tagID, noteID)
 	return nil
 }
 
 // SetNoteProperty 设置笔记扩展属性
 func (s *noteService) SetNoteProperty(noteID string, key string, value interface{}, propertyType string) error {
-	log.Printf("Setting property %s for note %s (type: %s)", key, noteID, propertyType)
+	logger.Infof("[笔记服务] 为笔记设置属性 %s 到笔记 %s (类型: %s)", key, noteID, propertyType)
 
 	// 开始事务
 	tx := s.db.Begin()
@@ -1074,7 +776,7 @@ func (s *noteService) SetNoteProperty(noteID string, key string, value interface
 
 	// 获取笔记
 	var note database.Note
-	if err := tx.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := tx.Where("id = ?", noteID).First(&note).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("note not found: %s", noteID)
@@ -1088,53 +790,48 @@ func (s *noteService) SetNoteProperty(noteID string, key string, value interface
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		tx.Rollback()
-		log.Printf("Failed to query existing property: %v", err)
+		logger.Errorf("[笔记服务] 查询现有属性失败: %v", err)
 		return fmt.Errorf("failed to query existing property: %w", err)
 	}
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// 创建新属性
 		property = database.NoteProperty{
-			NoteID:       note.ID,
-			PropertyKey:  key,
-			PropertyType: propertyType,
+			NoteID:        note.ID,
+			PropertyKey:   key,
+			DataType:      propertyType,
+			PropertyValue: fmt.Sprintf("%v", value),
 		}
 	} else {
-		// 更新现有属性类型
-		property.PropertyType = propertyType
-	}
-
-	// 设置值
-	if err := property.SetValue(value); err != nil {
-		tx.Rollback()
-		log.Printf("Failed to set property value: %v", err)
-		return fmt.Errorf("failed to set property value: %w", err)
+		// 更新现有属性
+		property.DataType = propertyType
+		property.PropertyValue = fmt.Sprintf("%v", value)
 	}
 
 	// 保存属性
 	if err := tx.Save(&property).Error; err != nil {
 		tx.Rollback()
-		log.Printf("Failed to save property: %v", err)
+		logger.Errorf("[笔记服务] 保存属性失败: %v", err)
 		return fmt.Errorf("failed to save property: %w", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit set note property transaction: %v", err)
+		logger.Errorf("[笔记服务] 提交设置笔记属性事务失败: %v", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Property set successfully: %s = %v", key, value)
+	logger.Infof("[笔记服务] 属性设置成功: %s = %v", key, value)
 	return nil
 }
 
 // GetNoteProperties 获取笔记的所有扩展属性
 func (s *noteService) GetNoteProperties(noteID string) ([]database.NoteProperty, error) {
-	log.Printf("Getting properties for note: %s", noteID)
+	logger.Infof("[笔记服务] 获取笔记的所有属性: %s", noteID)
 
 	// 获取笔记
 	var note database.Note
-	if err := s.db.Where("note_id = ?", noteID).First(&note).Error; err != nil {
+	if err := s.db.Where("id = ?", noteID).First(&note).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("note not found: %s", noteID)
 		}
@@ -1144,11 +841,11 @@ func (s *noteService) GetNoteProperties(noteID string) ([]database.NoteProperty,
 	// 获取属性
 	var properties []database.NoteProperty
 	if err := s.db.Where("note_id = ?", note.ID).Find(&properties).Error; err != nil {
-		log.Printf("Failed to get note properties: %v", err)
+		logger.Errorf("[笔记服务] 获取笔记属性失败: %v", err)
 		return nil, fmt.Errorf("failed to get note properties: %w", err)
 	}
 
-	log.Printf("Found %d properties for note %s", len(properties), noteID)
+	logger.Infof("[笔记服务] 找到 %d 个笔记属性: %s", len(properties), noteID)
 	return properties, nil
 }
 
@@ -1157,9 +854,9 @@ func (s *noteService) addNoteTags(tx *gorm.DB, noteID uint, tagIDs []string) err
 	for _, tagID := range tagIDs {
 		// 获取标签
 		var tag database.Tag
-		if err := tx.Where("tag_id = ?", tagID).First(&tag).Error; err != nil {
+		if err := tx.Where("id = ?", tagID).First(&tag).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				log.Printf("Tag not found: %s", tagID)
+				logger.Errorf("[笔记服务] 标签不存在: %s", tagID)
 				continue
 			}
 			return err
@@ -1183,7 +880,7 @@ func (s *noteService) addNoteTags(tx *gorm.DB, noteID uint, tagIDs []string) err
 
 		// 增加标签使用次数
 		if err := tx.Model(&tag).Update("usage_count", gorm.Expr("usage_count + 1")).Error; err != nil {
-			log.Printf("Failed to increment tag usage count: %v", err)
+			logger.Errorf("[笔记服务] 增加标签使用次数失败: %v", err)
 		}
 	}
 
@@ -1217,18 +914,15 @@ func (s *noteService) setNoteProperties(tx *gorm.DB, noteID uint, properties map
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 创建新属性
 			property = database.NoteProperty{
-				NoteID:       noteID,
-				PropertyKey:  key,
-				PropertyType: propertyType,
+				NoteID:        noteID,
+				PropertyKey:   key,
+				DataType:      propertyType,
+				PropertyValue: fmt.Sprintf("%v", value),
 			}
 		} else {
-			// 更新现有属性类型
-			property.PropertyType = propertyType
-		}
-
-		// 设置值
-		if err := property.SetValue(value); err != nil {
-			return fmt.Errorf("failed to set property value: %w", err)
+			// 更新现有属性
+			property.DataType = propertyType
+			property.PropertyValue = fmt.Sprintf("%v", value)
 		}
 
 		// 保存属性

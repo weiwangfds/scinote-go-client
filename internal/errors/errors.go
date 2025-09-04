@@ -2,6 +2,8 @@ package errors
 
 import (
 	"fmt"
+
+	"github.com/weiwangfds/scinote/internal/i18n"
 )
 
 // ErrorCode 错误码类型
@@ -163,95 +165,109 @@ func GetAppError(err error) (*AppError, bool) {
 // 预定义的常用错误
 var (
 	// 通用错误
-	ErrInternalServerError = New(ErrInternalServer, "服务器内部错误")
-	ErrInvalidParameters   = New(ErrInvalidParams, "参数错误")
-	ErrUnauthorizedAccess  = New(ErrUnauthorized, "未授权访问")
-	ErrForbiddenAccess     = New(ErrForbidden, "禁止访问")
-	ErrResourceNotFound    = New(ErrNotFound, "资源未找到")
+	ErrInternalServerError = New(ErrInternalServer, GetErrorMessage(ErrInternalServer))
+	ErrInvalidParameters   = New(ErrInvalidParams, GetErrorMessage(ErrInvalidParams))
+	ErrUnauthorizedAccess  = New(ErrUnauthorized, GetErrorMessage(ErrUnauthorized))
+	ErrForbiddenAccess     = New(ErrForbidden, GetErrorMessage(ErrForbidden))
+	ErrResourceNotFound    = New(ErrNotFound, GetErrorMessage(ErrNotFound))
 
 	// 文件相关错误
-	ErrFileNotFoundError       = New(ErrFileNotFound, "文件未找到")
-	ErrFileAlreadyExistsError  = New(ErrFileAlreadyExists, "文件已存在")
-	ErrFileUploadFailedError   = New(ErrFileUploadFailed, "文件上传失败")
-	ErrFileDeleteFailedError   = New(ErrFileDeleteFailed, "文件删除失败")
-	ErrFileReadFailedError     = New(ErrFileReadFailed, "文件读取失败")
-	ErrFileWriteFailedError    = New(ErrFileWriteFailed, "文件写入失败")
-	ErrFileSizeTooLargeError   = New(ErrFileSizeTooLarge, "文件大小超限")
-	ErrFileTypeNotAllowedError = New(ErrFileTypeNotAllowed, "文件类型不允许")
-	ErrFileCorruptedError      = New(ErrFileCorrupted, "文件损坏")
-	ErrFileHashMismatchError   = New(ErrFileHashMismatch, "文件哈希不匹配")
+	ErrFileNotFoundError       = New(ErrFileNotFound, GetErrorMessage(ErrFileNotFound))
+	ErrFileAlreadyExistsError  = New(ErrFileAlreadyExists, GetErrorMessage(ErrFileAlreadyExists))
+	ErrFileUploadFailedError   = New(ErrFileUploadFailed, GetErrorMessage(ErrFileUploadFailed))
+	ErrFileDeleteFailedError   = New(ErrFileDeleteFailed, GetErrorMessage(ErrFileDeleteFailed))
+	ErrFileReadFailedError     = New(ErrFileReadFailed, GetErrorMessage(ErrFileReadFailed))
+	ErrFileWriteFailedError    = New(ErrFileWriteFailed, GetErrorMessage(ErrFileWriteFailed))
+	ErrFileSizeTooLargeError   = New(ErrFileSizeTooLarge, GetErrorMessage(ErrFileSizeTooLarge))
+	ErrFileTypeNotAllowedError = New(ErrFileTypeNotAllowed, GetErrorMessage(ErrFileTypeNotAllowed))
+	ErrFileCorruptedError      = New(ErrFileCorrupted, GetErrorMessage(ErrFileCorrupted))
+	ErrFileHashMismatchError   = New(ErrFileHashMismatch, GetErrorMessage(ErrFileHashMismatch))
 
 	// OSS相关错误
-	ErrOSSConfigNotFoundError       = New(ErrOSSConfigNotFound, "OSS配置未找到")
-	ErrOSSConfigInvalidError        = New(ErrOSSConfigInvalid, "OSS配置无效")
-	ErrOSSConnectionFailedError     = New(ErrOSSConnectionFailed, "OSS连接失败")
-	ErrOSSUploadFailedError         = New(ErrOSSUploadFailed, "OSS上传失败")
-	ErrOSSDownloadFailedError       = New(ErrOSSDownloadFailed, "OSS下载失败")
-	ErrOSSDeleteFailedError         = New(ErrOSSDeleteFailed, "OSS删除失败")
-	ErrOSSListFailedError           = New(ErrOSSListFailed, "OSS列表获取失败")
-	ErrOSSSyncFailedError           = New(ErrOSSSyncFailed, "OSS同步失败")
-	ErrOSSProviderNotSupportedError = New(ErrOSSProviderNotSupported, "OSS提供商不支持")
+	ErrOSSConfigNotFoundError       = New(ErrOSSConfigNotFound, GetErrorMessage(ErrOSSConfigNotFound))
+	ErrOSSConfigInvalidError        = New(ErrOSSConfigInvalid, GetErrorMessage(ErrOSSConfigInvalid))
+	ErrOSSConnectionFailedError     = New(ErrOSSConnectionFailed, GetErrorMessage(ErrOSSConnectionFailed))
+	ErrOSSUploadFailedError         = New(ErrOSSUploadFailed, GetErrorMessage(ErrOSSUploadFailed))
+	ErrOSSDownloadFailedError       = New(ErrOSSDownloadFailed, GetErrorMessage(ErrOSSDownloadFailed))
+	ErrOSSDeleteFailedError         = New(ErrOSSDeleteFailed, GetErrorMessage(ErrOSSDeleteFailed))
+	ErrOSSListFailedError           = New(ErrOSSListFailed, GetErrorMessage(ErrOSSListFailed))
+	ErrOSSSyncFailedError           = New(ErrOSSSyncFailed, GetErrorMessage(ErrOSSSyncFailed))
+	ErrOSSProviderNotSupportedError = New(ErrOSSProviderNotSupported, GetErrorMessage(ErrOSSProviderNotSupported))
 
 	// 数据库相关错误
-	ErrDatabaseConnectionError  = New(ErrDatabaseConnection, "数据库连接错误")
-	ErrDatabaseQueryError       = New(ErrDatabaseQuery, "数据库查询错误")
-	ErrDatabaseInsertError      = New(ErrDatabaseInsert, "数据库插入错误")
-	ErrDatabaseUpdateError      = New(ErrDatabaseUpdate, "数据库更新错误")
-	ErrDatabaseDeleteError      = New(ErrDatabaseDelete, "数据库删除错误")
-	ErrDatabaseTransactionError = New(ErrDatabaseTransaction, "数据库事务错误")
-	ErrRecordNotFoundError      = New(ErrRecordNotFound, "记录未找到")
-	ErrRecordAlreadyExistsError = New(ErrRecordAlreadyExists, "记录已存在")
+	ErrDatabaseConnectionError  = New(ErrDatabaseConnection, GetErrorMessage(ErrDatabaseConnection))
+	ErrDatabaseQueryError       = New(ErrDatabaseQuery, GetErrorMessage(ErrDatabaseQuery))
+	ErrDatabaseInsertError      = New(ErrDatabaseInsert, GetErrorMessage(ErrDatabaseInsert))
+	ErrDatabaseUpdateError      = New(ErrDatabaseUpdate, GetErrorMessage(ErrDatabaseUpdate))
+	ErrDatabaseDeleteError      = New(ErrDatabaseDelete, GetErrorMessage(ErrDatabaseDelete))
+	ErrDatabaseTransactionError = New(ErrDatabaseTransaction, GetErrorMessage(ErrDatabaseTransaction))
+	ErrRecordNotFoundError      = New(ErrRecordNotFound, GetErrorMessage(ErrRecordNotFound))
+	ErrRecordAlreadyExistsError = New(ErrRecordAlreadyExists, GetErrorMessage(ErrRecordAlreadyExists))
 )
 
-// GetErrorMessage 根据错误码获取错误消息
+// 错误码到i18n键的映射
+var errorCodeToKeyMap = map[ErrorCode]string{
+	ErrSuccess:            "success",
+	ErrInternalServer:     "internal_server_error",
+	ErrInvalidParams:      "invalid_params",
+	ErrUnauthorized:       "unauthorized",
+	ErrForbidden:          "forbidden",
+	ErrNotFound:           "not_found",
+	ErrMethodNotAllowed:   "method_not_allowed",
+	ErrTooManyRequests:    "too_many_requests",
+	ErrServiceUnavailable: "service_unavailable",
+
+	ErrFileNotFound:       "file_not_found",
+	ErrFileAlreadyExists:  "file_already_exists",
+	ErrFileUploadFailed:   "file_upload_failed",
+	ErrFileDeleteFailed:   "file_delete_failed",
+	ErrFileReadFailed:     "file_read_failed",
+	ErrFileWriteFailed:    "file_write_failed",
+	ErrFileSizeTooLarge:   "file_size_too_large",
+	ErrFileTypeNotAllowed: "file_type_not_allowed",
+	ErrFileCorrupted:      "file_corrupted",
+	ErrFileHashMismatch:   "file_hash_mismatch",
+
+	ErrOSSConfigNotFound:       "oss_config_not_found",
+	ErrOSSConfigInvalid:        "oss_config_invalid",
+	ErrOSSConnectionFailed:     "oss_connection_failed",
+	ErrOSSUploadFailed:         "oss_upload_failed",
+	ErrOSSDownloadFailed:       "oss_download_failed",
+	ErrOSSDeleteFailed:         "oss_delete_failed",
+	ErrOSSListFailed:           "oss_list_failed",
+	ErrOSSSyncFailed:           "oss_sync_failed",
+	ErrOSSProviderNotSupported: "oss_provider_not_supported",
+
+	ErrDatabaseConnection:  "database_connection",
+	ErrDatabaseQuery:       "database_query",
+	ErrDatabaseInsert:      "database_insert",
+	ErrDatabaseUpdate:      "database_update",
+	ErrDatabaseDelete:      "database_delete",
+	ErrDatabaseTransaction: "database_transaction",
+	ErrRecordNotFound:      "record_not_found",
+	ErrRecordAlreadyExists: "record_already_exists",
+}
+
+// GetErrorMessage 根据错误码获取错误消息（使用默认语言）
 // @Description 根据错误码获取对应的错误消息
 // @Param code query int true "错误码"
 // @Return 错误消息
 func GetErrorMessage(code ErrorCode) string {
-	errorMessages := map[ErrorCode]string{
-		ErrSuccess:            "成功",
-		ErrInternalServer:     "服务器内部错误",
-		ErrInvalidParams:      "参数错误",
-		ErrUnauthorized:       "未授权",
-		ErrForbidden:          "禁止访问",
-		ErrNotFound:           "资源未找到",
-		ErrMethodNotAllowed:   "方法不允许",
-		ErrTooManyRequests:    "请求过于频繁",
-		ErrServiceUnavailable: "服务不可用",
+	return GetErrorMessageWithLang(code, i18n.GetInstance().GetDefaultLanguage())
+}
 
-		ErrFileNotFound:       "文件未找到",
-		ErrFileAlreadyExists:  "文件已存在",
-		ErrFileUploadFailed:   "文件上传失败",
-		ErrFileDeleteFailed:   "文件删除失败",
-		ErrFileReadFailed:     "文件读取失败",
-		ErrFileWriteFailed:    "文件写入失败",
-		ErrFileSizeTooLarge:   "文件大小超限",
-		ErrFileTypeNotAllowed: "文件类型不允许",
-		ErrFileCorrupted:      "文件损坏",
-		ErrFileHashMismatch:   "文件哈希不匹配",
-
-		ErrOSSConfigNotFound:       "OSS配置未找到",
-		ErrOSSConfigInvalid:        "OSS配置无效",
-		ErrOSSConnectionFailed:     "OSS连接失败",
-		ErrOSSUploadFailed:         "OSS上传失败",
-		ErrOSSDownloadFailed:       "OSS下载失败",
-		ErrOSSDeleteFailed:         "OSS删除失败",
-		ErrOSSListFailed:           "OSS列表获取失败",
-		ErrOSSSyncFailed:           "OSS同步失败",
-		ErrOSSProviderNotSupported: "OSS提供商不支持",
-
-		ErrDatabaseConnection:  "数据库连接错误",
-		ErrDatabaseQuery:       "数据库查询错误",
-		ErrDatabaseInsert:      "数据库插入错误",
-		ErrDatabaseUpdate:      "数据库更新错误",
-		ErrDatabaseDelete:      "数据库删除错误",
-		ErrDatabaseTransaction: "数据库事务错误",
-		ErrRecordNotFound:      "记录未找到",
-		ErrRecordAlreadyExists: "记录已存在",
+// GetErrorMessageWithLang 根据错误码和语言获取错误消息
+// @Description 根据错误码和指定语言获取对应的错误消息
+// @Param code query int true "错误码"
+// @Param lang query string true "语言代码，如zh-CN、en-US"
+// @Return 错误消息
+func GetErrorMessageWithLang(code ErrorCode, lang string) string {
+	// 获取错误码对应的i18n键
+	key, exists := errorCodeToKeyMap[code]
+	if !exists {
+		key = "unknown_error"
 	}
 
-	if message, exists := errorMessages[code]; exists {
-		return message
-	}
-	return "未知错误"
+	// 使用i18n获取翻译
+	return i18n.GetInstance().Translate(key, lang)
 }

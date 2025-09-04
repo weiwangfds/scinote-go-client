@@ -5,12 +5,12 @@ package service
 import (
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/weiwangfds/scinote/internal/database"
+	"github.com/weiwangfds/scinote/internal/logger"
 )
 
 // AliyunOSSProvider 阿里云OSS提供商实现
@@ -30,35 +30,35 @@ type AliyunOSSProvider struct {
 //   - *AliyunOSSProvider: 初始化完成的阿里云OSS提供商实例
 //   - error: 初始化过程中的错误信息
 func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error) {
-	log.Printf("Initializing Aliyun OSS provider with config: %s (Region: %s, Bucket: %s)", 
+	logger.Infof("[阿里云OSS] 初始化提供商实例, 配置名称: %s, 区域: %s, 存储桶: %s", 
 		config.Name, config.Region, config.Bucket)
 	
 	// 构建endpoint
 	endpoint := config.Endpoint
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("https://oss-%s.aliyuncs.com", config.Region)
-		log.Printf("Using default endpoint for region %s: %s", config.Region, endpoint)
+		logger.Infof("[阿里云OSS] 使用默认区域域名: %s, 区域: %s", endpoint, config.Region)
 	} else {
-		log.Printf("Using custom endpoint: %s", endpoint)
+		logger.Infof("[阿里云OSS] 使用自定义域名: %s", endpoint)
 	}
 
 	// 创建OSS客户端
-	log.Printf("Creating Aliyun OSS client with endpoint: %s", endpoint)
+	logger.Infof("[阿里云OSS] 创建客户端实例, 域名: %s", endpoint)
 	client, err := oss.New(endpoint, config.AccessKey, config.SecretKey)
 	if err != nil {
-		log.Printf("Failed to create Aliyun OSS client: %v", err)
+		logger.Errorf("[阿里云OSS] 创建客户端失败, 错误: %v", err)
 		return nil, fmt.Errorf("failed to create aliyun oss client: %w", err)
 	}
-	log.Printf("Aliyun OSS client created successfully")
+	logger.Info("[阿里云OSS] 客户端实例创建成功")
 
 	// 获取存储桶
-	log.Printf("Connecting to bucket: %s", config.Bucket)
+	logger.Infof("[阿里云OSS] 连接存储桶: %s", config.Bucket)
 	bucket, err := client.Bucket(config.Bucket)
 	if err != nil {
-		log.Printf("Failed to connect to bucket %s: %v", config.Bucket, err)
+		logger.Errorf("[阿里云OSS] 连接存储桶失败, 存储桶: %s, 错误: %v", config.Bucket, err)
 		return nil, fmt.Errorf("failed to get bucket %s: %w", config.Bucket, err)
 	}
-	log.Printf("Successfully connected to bucket: %s", config.Bucket)
+	logger.Infof("[阿里云OSS] 成功连接存储桶: %s", config.Bucket)
 
 	provider := &AliyunOSSProvider{
 		client: client,
@@ -66,7 +66,7 @@ func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error
 		config: config,
 	}
 	
-	log.Printf("Aliyun OSS provider initialized successfully for config: %s", config.Name)
+	logger.Infof("[阿里云OSS] 提供商实例初始化成功, 配置名称: %s", config.Name)
 	return provider, nil
 }
 
@@ -79,22 +79,22 @@ func NewAliyunOSSProvider(config *database.OSSConfig) (*AliyunOSSProvider, error
 // 返回:
 //   - error: 上传过程中的错误信息
 func (p *AliyunOSSProvider) UploadFile(objectKey string, reader io.Reader, contentType string) error {
-	log.Printf("Starting file upload to Aliyun OSS: %s (ContentType: %s)", objectKey, contentType)
+	logger.Infof("[阿里云OSS] 开始上传文件: %s, 内容类型: %s", objectKey, contentType)
 	
 	options := []oss.Option{}
 	if contentType != "" {
 		options = append(options, oss.ContentType(contentType))
-		log.Printf("Set content type for upload: %s", contentType)
+		logger.Infof("[阿里云OSS] 设置上传内容类型: %s", contentType)
 	}
 
-	log.Printf("Uploading file to bucket %s with key: %s", p.config.Bucket, objectKey)
+	logger.Infof("[阿里云OSS] 上传文件到存储桶: %s, 对象键: %s", p.config.Bucket, objectKey)
 	err := p.bucket.PutObject(objectKey, reader, options...)
 	if err != nil {
-		log.Printf("Failed to upload file %s to Aliyun OSS: %v", objectKey, err)
+		logger.Errorf("[阿里云OSS] 上传文件失败, 对象键: %s, 错误: %v", objectKey, err)
 		return fmt.Errorf("failed to upload file to aliyun oss: %w", err)
 	}
 
-	log.Printf("Successfully uploaded file to Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 成功上传文件: %s", objectKey)
 	return nil
 }
 
@@ -106,15 +106,15 @@ func (p *AliyunOSSProvider) UploadFile(objectKey string, reader io.Reader, conte
 //   - io.ReadCloser: 文件数据流，使用完毕后需要关闭
 //   - error: 下载过程中的错误信息
 func (p *AliyunOSSProvider) DownloadFile(objectKey string) (io.ReadCloser, error) {
-	log.Printf("Starting file download from Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 开始下载文件: %s", objectKey)
 	
 	body, err := p.bucket.GetObject(objectKey)
 	if err != nil {
-		log.Printf("Failed to download file %s from Aliyun OSS: %v", objectKey, err)
+		logger.Errorf("[阿里云OSS] 下载文件失败, 对象键: %s, 错误: %v", objectKey, err)
 		return nil, fmt.Errorf("failed to download file from aliyun oss: %w", err)
 	}
 
-	log.Printf("Successfully downloaded file from Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 成功下载文件: %s", objectKey)
 	return body, nil
 }
 
@@ -125,15 +125,15 @@ func (p *AliyunOSSProvider) DownloadFile(objectKey string) (io.ReadCloser, error
 // 返回:
 //   - error: 删除过程中的错误信息
 func (p *AliyunOSSProvider) DeleteFile(objectKey string) error {
-	log.Printf("Starting file deletion from Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 开始删除文件: %s", objectKey)
 	
 	err := p.bucket.DeleteObject(objectKey)
 	if err != nil {
-		log.Printf("Failed to delete file %s from Aliyun OSS: %v", objectKey, err)
+		logger.Errorf("[阿里云OSS] 删除文件失败, 对象键: %s, 错误: %v", objectKey, err)
 		return fmt.Errorf("failed to delete file from aliyun oss: %w", err)
 	}
 
-	log.Printf("Successfully deleted file from Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 成功删除文件: %s", objectKey)
 	return nil
 }
 
@@ -145,15 +145,15 @@ func (p *AliyunOSSProvider) DeleteFile(objectKey string) error {
 //   - bool: 文件是否存在
 //   - error: 检查过程中的错误信息
 func (p *AliyunOSSProvider) FileExists(objectKey string) (bool, error) {
-	log.Printf("Checking file existence in Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 检查文件是否存在: %s", objectKey)
 	
 	exists, err := p.bucket.IsObjectExist(objectKey)
 	if err != nil {
-		log.Printf("Failed to check file existence %s in Aliyun OSS: %v", objectKey, err)
+		logger.Errorf("[阿里云OSS] 检查文件存在性失败, 对象键: %s, 错误: %v", objectKey, err)
 		return false, fmt.Errorf("failed to check file existence in aliyun oss: %w", err)
 	}
 
-	log.Printf("File existence check result for %s: %v", objectKey, exists)
+	logger.Infof("[阿里云OSS] 文件存在性检查结果, 对象键: %s, 存在: %v", objectKey, exists)
 	return exists, nil
 }
 
@@ -165,11 +165,11 @@ func (p *AliyunOSSProvider) FileExists(objectKey string) (bool, error) {
 //   - *FileInfo: 文件信息结构体，包含大小、修改时间等
 //   - error: 获取过程中的错误信息
 func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
-	log.Printf("Getting file info from Aliyun OSS: %s", objectKey)
+	logger.Infof("[阿里云OSS] 获取文件信息: %s", objectKey)
 	
 	meta, err := p.bucket.GetObjectMeta(objectKey)
 	if err != nil {
-		log.Printf("Failed to get file info %s from Aliyun OSS: %v", objectKey, err)
+		logger.Errorf("[阿里云OSS] 获取文件信息失败, 对象键: %s, 错误: %v", objectKey, err)
 		return nil, fmt.Errorf("failed to get file info from aliyun oss: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 	var size int64
 	if sizeStr := meta.Get("Content-Length"); sizeStr != "" {
 		fmt.Sscanf(sizeStr, "%d", &size)
-		log.Printf("Parsed file size for %s: %d bytes", objectKey, size)
+		logger.Infof("[阿里云OSS] 解析文件大小, 对象键: %s, 大小: %d bytes", objectKey, size)
 	}
 
 	fileInfo := &FileInfo{
@@ -188,7 +188,7 @@ func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 		ContentType:  meta.Get("Content-Type"),
 	}
 	
-	log.Printf("Successfully retrieved file info for %s: Size=%d, ContentType=%s, LastModified=%s", 
+	logger.Infof("[阿里云OSS] 成功获取文件信息, 对象键: %s, 大小: %d bytes, 内容类型: %s, 最后修改: %s", 
 		objectKey, fileInfo.Size, fileInfo.ContentType, fileInfo.LastModified)
 	return fileInfo, nil
 }
@@ -202,7 +202,7 @@ func (p *AliyunOSSProvider) GetFileInfo(objectKey string) (*FileInfo, error) {
 //   - []FileInfo: 文件信息列表
 //   - error: 列表操作中的错误信息
 func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, error) {
-	log.Printf("Listing files from Aliyun OSS with prefix: %s, maxKeys: %d", prefix, maxKeys)
+	logger.Infof("[阿里云OSS] 列出文件, 前缀: %s, 最大数量: %d", prefix, maxKeys)
 	
 	options := []oss.Option{
 		oss.Prefix(prefix),
@@ -211,11 +211,11 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 
 	lsRes, err := p.bucket.ListObjects(options...)
 	if err != nil {
-		log.Printf("Failed to list files from Aliyun OSS with prefix %s: %v", prefix, err)
+		logger.Errorf("[阿里云OSS] 列出文件失败, 前缀: %s, 错误: %v", prefix, err)
 		return nil, fmt.Errorf("failed to list files from aliyun oss: %w", err)
 	}
 
-	log.Printf("Found %d objects in Aliyun OSS with prefix: %s", len(lsRes.Objects), prefix)
+	logger.Infof("[阿里云OSS] 找到 %d 个对象, 前缀: %s", len(lsRes.Objects), prefix)
 	
 	var files []FileInfo
 	for _, object := range lsRes.Objects {
@@ -227,11 +227,11 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 			ContentType:  object.Type,
 		}
 		files = append(files, fileInfo)
-		log.Printf("Added file to list: %s (Size: %d, LastModified: %s)", 
+		logger.Infof("[阿里云OSS] 添加文件到列表: %s, 大小: %d bytes, 最后修改: %s", 
 			fileInfo.Key, fileInfo.Size, fileInfo.LastModified)
 	}
 
-	log.Printf("Successfully listed %d files from Aliyun OSS", len(files))
+	logger.Infof("[阿里云OSS] 成功列出 %d 个文件", len(files))
 	return files, nil
 }
 
@@ -240,16 +240,16 @@ func (p *AliyunOSSProvider) ListFiles(prefix string, maxKeys int) ([]FileInfo, e
 // 返回:
 //   - error: 连接测试中的错误信息，nil表示连接正常
 func (p *AliyunOSSProvider) TestConnection() error {
-	log.Printf("Testing Aliyun OSS connection for bucket: %s", p.config.Bucket)
+	logger.Infof("[阿里云OSS] 测试连接, 存储桶: %s", p.config.Bucket)
 	
 	// 尝试列出存储桶信息
 	bucketInfo, err := p.client.GetBucketInfo(p.config.Bucket)
 	if err != nil {
-		log.Printf("Aliyun OSS connection test failed for bucket %s: %v", p.config.Bucket, err)
+		logger.Errorf("[阿里云OSS] 连接测试失败, 存储桶: %s, 错误: %v", p.config.Bucket, err)
 		return fmt.Errorf("failed to test aliyun oss connection: %w", err)
 	}
 
-	log.Printf("Aliyun OSS connection test successful for bucket: %s (CreationDate: %v, Location: %s)", 
+	logger.Infof("[阿里云OSS] 连接测试成功, 存储桶: %s, 创建日期: %v, 位置: %s", 
 		p.config.Bucket, bucketInfo.BucketInfo.CreationDate, bucketInfo.BucketInfo.Location)
 	return nil
 }

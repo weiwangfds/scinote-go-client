@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/weiwangfds/scinote/internal/database"
+	"github.com/weiwangfds/scinote/internal/logger"
 	"gorm.io/gorm"
 )
 
@@ -120,8 +120,8 @@ type fileWatcherService struct {
 //   - 配置同步队列和重试队列
 //   - 设置重试策略参数
 func NewFileWatcherService(db *gorm.DB, ossConfigService OSSConfigService) FileWatcherService {
-	log.Printf("Initializing file watcher service with queue sizes - sync: 100, retry: 50")
-	log.Printf("Retry configuration - max retries: 5, min interval: 30s")
+	logger.Infof("[文件监听服务] 初始化文件监听服务，队列大小 - 同步: 100, 重试: 50")
+	logger.Infof("[文件监听服务] 重试配置 - 最大重试次数: 5, 最小间隔: 30秒")
 
 	return &fileWatcherService{
 		db:               db,
@@ -139,86 +139,86 @@ func NewFileWatcherService(db *gorm.DB, ossConfigService OSSConfigService) FileW
 // Start 启动文件监听服务
 // 启动所有必要的工作协程来处理文件监听和同步任务
 func (s *fileWatcherService) Start(ctx context.Context) error {
-	log.Printf("Attempting to start file watcher service")
+	logger.Infof("[文件监听服务] 尝试启动文件监听服务")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.isRunning {
-		log.Printf("File watcher service is already running, skipping start")
+		logger.Infof("[文件监听服务] 文件监听服务已经在运行中，跳过启动")
 		return fmt.Errorf("file watcher is already running")
 	}
 
 	s.isRunning = true
-	log.Printf("Starting file watcher service with context...")
+	logger.Infof("[文件监听服务] 开始使用上下文启动文件监听服务...")
 
 	// 启动同步处理协程
-	log.Printf("Starting sync worker goroutine")
+	logger.Infof("[文件监听服务] 启动同步处理协程")
 	s.wg.Add(1)
 	go s.syncWorker(ctx)
 
 	// 启动重试处理协程
-	log.Printf("Starting retry worker goroutine")
+	logger.Infof("[文件监听服务] 启动重试处理协程")
 	s.wg.Add(1)
 	go s.retryWorker(ctx)
 
 	// 启动数据库变化监听协程
-	log.Printf("Starting database watcher goroutine")
+	logger.Infof("[文件监听服务] 启动数据库变化监听协程")
 	s.wg.Add(1)
 	go s.databaseWatcher(ctx)
 
-	log.Printf("File watcher service started successfully with 3 worker goroutines")
+	logger.Infof("[文件监听服务] 文件监听服务成功启动，包含3个工作协程")
 	return nil
 }
 
 // Stop 停止文件监听服务
 // 优雅关闭所有工作协程并等待任务完成
 func (s *fileWatcherService) Stop() error {
-	log.Printf("Attempting to stop file watcher service")
+	logger.Infof("[文件监听服务] 尝试停止文件监听服务")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !s.isRunning {
-		log.Printf("File watcher service is not running, nothing to stop")
+		logger.Infof("[文件监听服务] 文件监听服务未运行，无需停止")
 		return nil
 	}
 
-	log.Printf("Stopping file watcher service...")
+	logger.Infof("[文件监听服务] 正在停止文件监听服务...")
 
 	// 发送停止信号
-	log.Printf("Sending stop signal to all worker goroutines")
+	logger.Infof("[文件监听服务] 向所有工作协程发送停止信号")
 	close(s.stopChan)
 
 	// 等待所有协程结束
-	log.Printf("Waiting for all worker goroutines to finish...")
+	logger.Infof("[文件监听服务] 等待所有工作协程完成...")
 	s.wg.Wait()
 
 	s.isRunning = false
-	log.Printf("File watcher service stopped successfully")
+	logger.Infof("[文件监听服务] 文件监听服务成功停止")
 	return nil
 }
 
 // TriggerSync 手动触发指定文件的同步
 // 立即将文件加入同步队列，绕过自动监听机制
 func (s *fileWatcherService) TriggerSync(fileID string) error {
-	log.Printf("Manual sync triggered for file ID: %s", fileID)
+	logger.Infof("[文件监听服务] 手动触发文件同步，文件ID: %s", fileID)
 
 	var fileMetadata database.FileMetadata
 	if err := s.db.Where("file_id = ?", fileID).First(&fileMetadata).Error; err != nil {
-		log.Printf("File not found for manual sync %s: %v", fileID, err)
+		logger.Errorf("[文件监听服务] 手动同步时未找到文件 %s: %v", fileID, err)
 		return fmt.Errorf("file not found: %w", err)
 	}
 
-	log.Printf("Found file for manual sync: %s (Name: %s)", fileID, fileMetadata.FileName)
+	logger.Infof("[文件监听服务] 找到手动同步的文件: %s (名称: %s)", fileID, fileMetadata.FileName)
 
 	// 将文件添加到同步队列
 	select {
 	case s.syncQueue <- &fileMetadata:
-		log.Printf("File successfully queued for manual sync: %s", fileID)
+		logger.Infof("[文件监听服务] 文件成功加入手动同步队列: %s", fileID)
 		return nil
 	default:
-		log.Printf("Sync queue is full, cannot queue file for manual sync: %s", fileID)
+		logger.Errorf("[文件监听服务] 同步队列已满，无法将文件加入手动同步队列: %s", fileID)
 		return fmt.Errorf("sync queue is full")
 	}
 }
@@ -227,24 +227,24 @@ func (s *fileWatcherService) TriggerSync(fileID string) error {
 // 定期检查数据库中的文件变化并将变化的文件加入同步队列
 func (s *fileWatcherService) databaseWatcher(ctx context.Context) {
 	defer s.wg.Done()
-	log.Printf("Database watcher goroutine started")
+	logger.Infof("[文件监听服务] 数据库监听协程已启动")
 
 	ticker := time.NewTicker(5 * time.Second) // 每5秒检查一次
 	defer ticker.Stop()
 
 	var lastCheckTime time.Time = time.Now().Add(-time.Minute) // 初始检查前1分钟的变化
-	log.Printf("Database watcher initialized with check interval: 5s, initial check time: %v", lastCheckTime)
+	logger.Infof("[文件监听服务] 数据库监听初始化完成，检查间隔: 5秒, 初始检查时间: %v", lastCheckTime)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Database watcher received context cancellation, stopping")
+			logger.Infof("[文件监听服务] 数据库监听收到上下文取消信号，停止运行")
 			return
 		case <-s.stopChan:
-			log.Printf("Database watcher received stop signal, stopping")
+			logger.Infof("[文件监听服务] 数据库监听收到停止信号，停止运行")
 			return
 		case <-ticker.C:
-			log.Printf("Database watcher checking for file changes since: %v", lastCheckTime)
+			logger.Infof("[文件监听服务] 数据库监听检查自 %v 以来的文件变化", lastCheckTime)
 			s.checkFileChanges(lastCheckTime)
 			lastCheckTime = time.Now()
 		}
@@ -255,32 +255,32 @@ func (s *fileWatcherService) databaseWatcher(ctx context.Context) {
 // 查询数据库中的文件变化并将符合条件的文件加入同步队列
 // 当没有OSS配置时，会优雅跳过同步，不影响其他功能
 func (s *fileWatcherService) checkFileChanges(since time.Time) {
-	log.Printf("Checking file changes since: %v", since)
+	logger.Infof("[文件监听服务] 检查自 %v 以来的文件变化", since)
 
 	// 获取激活的OSS配置
 	ossConfig, err := s.ossConfigService.GetActiveOSSConfig()
 	if err != nil {
 		// OSS配置不存在时，仅记录日志但不影响其他功能
-		log.Printf("No active OSS config found, skipping OSS sync (this is normal if OSS is not configured): %v", err)
+		logger.Infof("[文件监听服务] 未找到激活的OSS配置，跳过OSS同步（如果未配置OSS，这是正常情况）: %v", err)
 		return
 	}
 
-	log.Printf("Found active OSS config: %s (AutoSync: %v)", ossConfig.Name, ossConfig.AutoSync)
+	logger.Infof("[文件监听服务] 找到激活的OSS配置: %s (自动同步: %v)", ossConfig.Name, ossConfig.AutoSync)
 
 	// 如果未开启自动同步，跳过
 	if !ossConfig.AutoSync {
-		log.Printf("Auto sync is disabled for OSS config %s, skipping file change check", ossConfig.Name)
+		logger.Infof("[文件监听服务] OSS配置 %s 的自动同步已禁用，跳过文件变更检查", ossConfig.Name)
 		return
 	}
 
 	// 查询自上次检查以来有变化的文件
 	var changedFiles []database.FileMetadata
 	if err := s.db.Where("updated_at > ? OR created_at > ?", since, since).Find(&changedFiles).Error; err != nil {
-		log.Printf("Failed to query changed files since %v: %v", since, err)
+		logger.Errorf("[文件监听服务] 查询自 %v 以来的变更文件失败: %v", since, err)
 		return
 	}
 
-	log.Printf("Found %d changed files since %v", len(changedFiles), since)
+	logger.Infof("[文件监听服务] 找到 %d 个自 %v 以来变更的文件", len(changedFiles), since)
 
 	// 将变化的文件添加到同步队列
 	queuedCount := 0
@@ -288,60 +288,60 @@ func (s *fileWatcherService) checkFileChanges(since time.Time) {
 	for _, file := range changedFiles {
 		select {
 		case s.syncQueue <- &file:
-			log.Printf("File queued for sync: %s (ID: %s)", file.FileName, file.FileID)
-			queuedCount++
-		default:
-			log.Printf("Sync queue is full, skipping file: %s (ID: %s)", file.FileName, file.FileID)
+				logger.Infof("[文件监听服务] 文件已加入同步队列: %s (ID: %s)", file.FileName, file.FileID)
+				queuedCount++
+			default:
+				logger.Infof("[文件监听服务] 同步队列已满，跳过文件: %s (ID: %s)", file.FileName, file.FileID)
 			skippedCount++
 		}
 	}
 
-	log.Printf("File change check completed - queued: %d, skipped: %d", queuedCount, skippedCount)
+	logger.Infof("[文件监听服务] 文件变更检查完成 - 已加入队列: %d, 已跳过: %d", queuedCount, skippedCount)
 }
 
 // retryWorker 重试处理工作协程
 // 定期检查重试队列并处理到期的重试项
 func (s *fileWatcherService) retryWorker(ctx context.Context) {
 	defer s.wg.Done()
-	log.Printf("Retry worker goroutine started")
+	logger.Infof("[文件监听服务] 重试处理协程已启动")
 
 	ticker := time.NewTicker(10 * time.Second) // 每10秒检查一次重试队列
 	defer ticker.Stop()
-	log.Printf("Retry worker initialized with check interval: 10s")
+	logger.Infof("[文件监听服务] 重试处理初始化完成，检查间隔: 10秒")
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Retry worker received context cancellation, stopping")
+			logger.Infof("[文件监听服务] 重试处理收到上下文取消信号，停止运行")
 			return
 		case <-s.stopChan:
-			log.Printf("Retry worker received stop signal, stopping")
+			logger.Infof("[文件监听服务] 重试处理收到停止信号，停止运行")
 			return
 		case <-ticker.C:
 			// 检查是否有需要重试的项
 			now := time.Now()
-			log.Printf("Retry worker checking for due retry items at: %v", now)
+			logger.Infof("[文件监听服务] 重试处理检查到期重试项: %v", now)
 			retryItems := s.getRetryItemsDue(now)
-			log.Printf("Found %d retry items due for processing", len(retryItems))
+			logger.Infof("[文件监听服务] 找到 %d 个到期重试项需要处理", len(retryItems))
 
 			processedCount := 0
 			for _, item := range retryItems {
 				// 将文件重新加入同步队列
 				select {
 				case s.syncQueue <- item.FileMetadata:
-					log.Printf("Retrying file upload: %s (attempt %d/%d)",
-						item.FileMetadata.FileName, item.RetryCount+1, s.maxRetries)
-					processedCount++
-				default:
-					log.Printf("Sync queue is full, can't retry file: %s", item.FileMetadata.FileName)
+						logger.Infof("[文件监听服务] 重试文件上传: %s (尝试 %d/%d)",
+							item.FileMetadata.FileName, item.RetryCount+1, s.maxRetries)
+						processedCount++
+					default:
+						logger.Infof("[文件监听服务] 同步队列已满，无法重试文件: %s", item.FileMetadata.FileName)
 					// 如果队列已满，稍后再试
 					s.scheduleRetry(item)
 				}
 			}
-			log.Printf("Retry worker processed %d retry items", processedCount)
+			logger.Infof("[文件监听服务] 重试处理已处理 %d 个重试项", processedCount)
 		case item := <-s.retryQueue:
 			// 将重试项保存到数据库或内存中
-			log.Printf("Retry worker received new retry item for file: %s", item.FileMetadata.FileName)
+			logger.Infof("[文件监听服务] 重试处理收到新的重试项: %s", item.FileMetadata.FileName)
 			s.saveRetryItem(item)
 		}
 	}
@@ -361,12 +361,12 @@ func (s *fileWatcherService) retryWorker(ctx context.Context) {
 //   - 查询数据库中NextRetry时间小于等于now的重试项
 //   - 返回需要重新处理的文件列表
 func (s *fileWatcherService) getRetryItemsDue(now time.Time) []*RetryItem {
-	log.Printf("Getting retry items due before: %v", now)
+	logger.Infof("[文件监听服务] 获取截止 %v 的到期重试项", now)
 	// 注意：这里只是模拟实现，实际应该从数据库或内存中获取重试项
 	// 为简化实现，我们暂时返回空列表
 	// TODO: 实现从数据库查询到期重试项的逻辑
 	retryItems := []*RetryItem{}
-	log.Printf("Found %d retry items due for processing", len(retryItems))
+	logger.Infof("[文件监听服务] 找到 %d 个到期重试项需要处理", len(retryItems))
 	return retryItems
 }
 
@@ -381,12 +381,12 @@ func (s *fileWatcherService) getRetryItemsDue(now time.Time) []*RetryItem {
 //   - 记录重试次数和下次重试时间
 //   - 用于重试工作协程后续处理
 func (s *fileWatcherService) saveRetryItem(item *RetryItem) {
-	log.Printf("Saving retry item for file: %s (retry count: %d, next retry at: %v)",
+	logger.Infof("[文件监听服务] 保存文件重试项: %s (重试次数: %d, 下次重试时间: %v)",
 		item.FileMetadata.FileName, item.RetryCount, item.NextRetry)
 	// 注意：这里只是模拟实现，实际应该保存到数据库或内存中
 	// 为简化实现，我们暂时只记录日志
 	// TODO: 实现重试项持久化存储逻辑
-	log.Printf("Retry item saved successfully for file: %s", item.FileMetadata.FileName)
+	logger.Infof("[文件监听服务] 文件重试项保存成功: %s", item.FileMetadata.FileName)
 }
 
 // scheduleRetry 安排重试任务
@@ -401,12 +401,12 @@ func (s *fileWatcherService) saveRetryItem(item *RetryItem) {
 //   - 将重试项加入重试队列等待处理
 //   - 记录重试调度的详细日志
 func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
-	log.Printf("Scheduling retry for file: %s (current retry count: %d)",
+	logger.Infof("[文件监听服务] 安排文件重试: %s (当前重试次数: %d)",
 		item.FileMetadata.FileName, item.RetryCount)
 
 	// 检查是否超过最大重试次数
 	if item.RetryCount >= s.maxRetries {
-		log.Printf("Maximum retry attempts (%d) reached for file: %s, stopping retry",
+		logger.Infof("[文件监听服务] 文件已达到最大重试次数 (%d): %s, 停止重试",
 			s.maxRetries, item.FileMetadata.FileName)
 		return
 	}
@@ -414,7 +414,7 @@ func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
 	// 计算下一次重试时间（指数退避算法）
 	backoff := time.Duration(item.RetryCount*item.RetryCount) * s.minRetryInterval
 	nextRetry := time.Now().Add(backoff)
-	log.Printf("Calculated backoff duration: %v for retry attempt %d", backoff, item.RetryCount+1)
+	logger.Infof("[文件监听服务] 计算退避时间: %v 用于第 %d 次重试", backoff, item.RetryCount+1)
 
 	// 创建新的重试项
 	newItem := &RetryItem{
@@ -426,10 +426,10 @@ func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
 	// 添加到重试队列
 	select {
 	case s.retryQueue <- newItem:
-		log.Printf("Scheduled retry for file: %s at %v (attempt %d/%d)",
+		logger.Infof("[文件监听服务] 已安排文件重试: %s 时间: %v (尝试 %d/%d)",
 			item.FileMetadata.FileName, nextRetry, item.RetryCount+1, s.maxRetries)
 	default:
-		log.Printf("Retry queue is full, can't schedule retry for file: %s", item.FileMetadata.FileName)
+		logger.Infof("[文件监听服务] 重试队列已满，无法安排文件重试: %s", item.FileMetadata.FileName)
 	}
 }
 
@@ -445,18 +445,18 @@ func (s *fileWatcherService) scheduleRetry(item *RetryItem) {
 //   - 处理上下文取消和停止信号
 func (s *fileWatcherService) syncWorker(ctx context.Context) {
 	defer s.wg.Done()
-	log.Printf("Sync worker goroutine started")
+	logger.Infof("[文件监听服务] 同步处理协程已启动")
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Sync worker received context cancellation, stopping")
+			logger.Infof("[文件监听服务] 同步处理收到上下文取消信号，停止运行")
 			return
 		case <-s.stopChan:
-			log.Printf("Sync worker received stop signal, stopping")
+			logger.Infof("[文件监听服务] 同步处理收到停止信号，停止运行")
 			return
 		case fileMetadata := <-s.syncQueue:
-			log.Printf("Sync worker processing file: %s (ID: %s)", fileMetadata.FileName, fileMetadata.FileID)
+			logger.Infof("[文件监听服务] 同步处理正在处理文件: %s (ID: %s)", fileMetadata.FileName, fileMetadata.FileID)
 			s.syncFileToOSS(fileMetadata)
 		}
 	}
@@ -475,41 +475,41 @@ func (s *fileWatcherService) syncWorker(ctx context.Context) {
 //   - 记录同步日志和处理失败重试
 //   - 支持多种文件格式的内容类型识别
 func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) {
-	log.Printf("Starting OSS sync for file: %s (ID: %s, Size: %d bytes, Path: %s)",
+	logger.Infof("[文件监听服务] 开始OSS同步文件: %s (ID: %s, 大小: %d 字节, 路径: %s)",
 		fileMetadata.FileName, fileMetadata.FileID, fileMetadata.FileSize, fileMetadata.StoragePath)
 
 	// 获取激活的OSS配置
-	log.Printf("Retrieving active OSS configuration for file sync")
+	logger.Infof("[文件监听服务] 获取文件同步的激活OSS配置")
 	ossConfig, err := s.ossConfigService.GetActiveOSSConfig()
 	if err != nil {
-		log.Printf("Failed to get active OSS config, skipping sync for file %s: %v", fileMetadata.FileName, err)
+		logger.Infof("[文件监听服务] 获取激活的OSS配置失败，跳过文件 %s 的同步: %v", fileMetadata.FileName, err)
 		return // OSS没有配置时不上传
 	}
 
-	log.Printf("Found active OSS config: %s (Provider: %s, AutoSync: %v)",
+	logger.Infof("[文件监听服务] 找到激活的OSS配置: %s (提供商: %s, 自动同步: %v)",
 		ossConfig.Name, ossConfig.Provider, ossConfig.AutoSync)
 
 	// 如果未开启自动同步，跳过
 	if !ossConfig.AutoSync {
-		log.Printf("OSS auto-sync is disabled for config %s, skipping file: %s",
+		logger.Infof("[文件监听服务] OSS配置 %s 的自动同步已禁用，跳过文件: %s",
 			ossConfig.Name, fileMetadata.FileName)
 		return // OSS功能禁用时不上传
 	}
 
 	// 创建OSS提供商实例
-	log.Printf("Creating OSS provider instance for %s", ossConfig.Provider)
+	logger.Infof("[文件监听服务] 为 %s 创建OSS提供商实例", ossConfig.Provider)
 	provider, err := s.factory.CreateProvider(ossConfig)
 	if err != nil {
-		log.Printf("Failed to create OSS provider for %s: %v", ossConfig.Provider, err)
+		logger.Errorf("[文件监听服务] 为 %s 创建OSS提供商失败: %v", ossConfig.Provider, err)
 		return
 	}
 
 	// 生成OSS路径
 	ossPath := s.generateOSSPath(fileMetadata, ossConfig)
-	log.Printf("Generated OSS path for file %s: %s", fileMetadata.FileName, ossPath)
+	logger.Infof("[文件监听服务] 为文件 %s 生成OSS路径: %s", fileMetadata.FileName, ossPath)
 
 	// 记录同步开始
-	log.Printf("Creating sync log entry for file: %s", fileMetadata.FileName)
+	logger.Infof("[文件监听服务] 为文件创建同步日志: %s", fileMetadata.FileName)
 	syncLog := &database.SyncLog{
 		FileID:      fileMetadata.FileID,
 		OSSConfigID: ossConfig.ID,
@@ -520,21 +520,21 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 	}
 
 	if dbErr := s.db.Create(syncLog).Error; dbErr != nil {
-		log.Printf("Failed to create sync log for file %s: %v", fileMetadata.FileName, err)
+		logger.Errorf("[文件监听服务] 为文件 %s 创建同步日志失败: %v", fileMetadata.FileName, err)
 		return
 	}
-	log.Printf("Sync log created successfully for file: %s (Log ID: %d)", fileMetadata.FileName, syncLog.ID)
+	logger.Infof("[文件监听服务] 文件同步日志创建成功: %s (日志ID: %d)", fileMetadata.FileName, syncLog.ID)
 
 	// 执行同步
 	startTime := time.Now()
-	log.Printf("Starting file upload process at: %v", startTime)
+	logger.Infof("[文件监听服务] 开始文件上传流程，时间: %v", startTime)
 
 	// 检查本地文件是否存在
-	log.Printf("Checking local file existence: %s", fileMetadata.StoragePath)
+	logger.Infof("[文件监听服务] 检查本地文件是否存在: %s", fileMetadata.StoragePath)
 	if _, osErr := os.Stat(fileMetadata.StoragePath); os.IsNotExist(osErr) {
-		log.Printf("Local file not found: %s, scheduling retry", fileMetadata.StoragePath)
+		logger.Infof("[文件监听服务] 本地文件不存在: %s, 安排重试", fileMetadata.StoragePath)
 		// 本地文件不存在，安排后续重试
-		s.updateSyncLogError(syncLog, fmt.Sprintf("Local file not found: %s", fileMetadata.StoragePath))
+		s.updateSyncLogError(syncLog, fmt.Sprintf("本地文件不存在: %s", fileMetadata.StoragePath))
 
 		// 创建重试项
 		retryItem := &RetryItem{
@@ -545,18 +545,18 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 
 		// 安排重试
 		s.scheduleRetry(retryItem)
-		log.Printf("Local file not found, scheduled for retry in 1 minute: %s", fileMetadata.FileName)
+		logger.Infof("[文件监听服务] 本地文件不存在，已安排1分钟后重试: %s", fileMetadata.FileName)
 		return
 	}
-	log.Printf("Local file exists and accessible: %s", fileMetadata.StoragePath)
+	logger.Infof("[文件监听服务] 本地文件存在且可访问: %s", fileMetadata.StoragePath)
 
 	// 打开本地文件
-	log.Printf("Opening local file for reading: %s", fileMetadata.StoragePath)
+	logger.Infof("[文件监听服务] 打开本地文件进行读取: %s", fileMetadata.StoragePath)
 	file, err := os.Open(fileMetadata.StoragePath)
 	if err != nil {
-		log.Printf("Failed to open local file %s: %v, scheduling retry", fileMetadata.StoragePath, err)
+		logger.Errorf("[文件监听服务] 打开本地文件 %s 失败: %v, 安排重试", fileMetadata.StoragePath, err)
 		// 打开文件失败，安排后续重试
-		s.updateSyncLogError(syncLog, fmt.Sprintf("Failed to open local file: %v", err))
+		s.updateSyncLogError(syncLog, fmt.Sprintf("打开本地文件失败: %v", err))
 
 		// 创建重试项
 		retryItem := &RetryItem{
@@ -567,21 +567,21 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 
 		// 安排重试
 		s.scheduleRetry(retryItem)
-		log.Printf("Failed to open file, scheduled for retry in 30 seconds: %s", fileMetadata.FileName)
+		logger.Infof("[文件监听服务] 打开文件失败，已安排30秒后重试: %s", fileMetadata.FileName)
 		return
 	}
 	defer file.Close()
-	log.Printf("File opened successfully for reading: %s", fileMetadata.FileName)
+	logger.Infof("[文件监听服务] 文件成功打开用于读取: %s", fileMetadata.FileName)
 
 	// 获取内容类型
 	contentType := s.getContentType(fileMetadata.FileFormat)
-	log.Printf("Determined content type for file %s (format: %s): %s",
+	logger.Infof("[文件监听服务] 确定文件 %s 的内容类型 (格式: %s): %s",
 		fileMetadata.FileName, fileMetadata.FileFormat, contentType)
 
 	// 上传到OSS
-	log.Printf("Starting file upload to OSS: %s -> %s", fileMetadata.FileName, ossPath)
+	logger.Infof("[文件监听服务] 开始文件上传到OSS: %s -> %s", fileMetadata.FileName, ossPath)
 	if err := provider.UploadFile(ossPath, file, contentType); err != nil {
-		log.Printf("File upload to OSS failed for %s: %v, scheduling retry", fileMetadata.FileName, err)
+		logger.Errorf("[文件监听服务] 文件上传到OSS失败 %s: %v, 安排重试", fileMetadata.FileName, err)
 		// 对于所有上传失败，都放入重试队列，不在此处报错
 		// 创建初始重试项
 		retryItem := &RetryItem{
@@ -592,13 +592,13 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 
 		// 安排重试
 		s.scheduleRetry(retryItem)
-		log.Printf("File upload failed, scheduled for retry in 30 seconds: %s", fileMetadata.FileName)
+		logger.Infof("[文件监听服务] 文件上传失败，已安排30秒后重试: %s", fileMetadata.FileName)
 		return
 	}
 
 	// 更新同步日志为成功
 	duration := time.Since(startTime).Milliseconds()
-	log.Printf("File upload completed successfully in %d ms: %s", duration, fileMetadata.FileName)
+	logger.Infof("[文件监听服务] 文件上传成功完成，用时 %d 毫秒: %s", duration, fileMetadata.FileName)
 
 	updates := map[string]interface{}{
 		"status":   "success",
@@ -606,12 +606,12 @@ func (s *fileWatcherService) syncFileToOSS(fileMetadata *database.FileMetadata) 
 	}
 
 	if err := s.db.Model(syncLog).Updates(updates).Error; err != nil {
-		log.Printf("Failed to update sync log for successful upload %s: %v", fileMetadata.FileName, err)
+		logger.Errorf("[文件监听服务] 更新文件上传成功日志失败 %s: %v", fileMetadata.FileName, err)
 	} else {
-		log.Printf("Sync log updated successfully for file: %s", fileMetadata.FileName)
+		logger.Infof("[文件监听服务] 文件同步日志更新成功: %s", fileMetadata.FileName)
 	}
 
-	log.Printf("File synced successfully to OSS: %s -> %s (Duration: %dms, Size: %d bytes)",
+	logger.Infof("[文件监听服务] 文件成功同步到OSS: %s -> %s (耗时: %d毫秒, 大小: %d 字节)",
 		fileMetadata.FileName, ossPath, duration, fileMetadata.FileSize)
 }
 
@@ -655,11 +655,11 @@ func (s *fileWatcherService) updateSyncLogError(syncLog *database.SyncLog, error
 
 	if err := s.db.Model(syncLog).Updates(updates).Error; err != nil {
 		// 避免报错，只记录状态
-		log.Printf("Log update status: %v", err)
+		logger.Infof("[文件监听服务] 日志更新状态: %v", err)
 	}
 
 	// 避免报错日志，使用中性状态记录
-	log.Printf("File sync status: %s", errorMsg)
+	logger.Infof("[文件监听服务] 文件同步状态: %s", errorMsg)
 }
 
 // getContentType 根据文件格式获取MIME内容类型
@@ -677,7 +677,7 @@ func (s *fileWatcherService) updateSyncLogError(syncLog *database.SyncLog, error
 //   - 对于未知格式返回通用的二进制流类型
 //   - 自动处理大小写转换确保匹配准确性
 func (s *fileWatcherService) getContentType(fileFormat string) string {
-	log.Printf("Determining content type for file format: %s", fileFormat)
+	logger.Infof("[文件监听服务] 确定文件格式的内容类型: %s", fileFormat)
 
 	// 定义文件格式到MIME类型的映射表
 	contentTypes := map[string]string{
@@ -723,15 +723,15 @@ func (s *fileWatcherService) getContentType(fileFormat string) string {
 
 	// 转换为小写进行匹配
 	lowerFormat := strings.ToLower(fileFormat)
-	log.Printf("Normalized file format for lookup: %s", lowerFormat)
+	logger.Infof("[文件监听服务] 标准化文件格式用于查找: %s", lowerFormat)
 
 	if contentType, exists := contentTypes[lowerFormat]; exists {
-		log.Printf("Found matching content type for %s: %s", fileFormat, contentType)
+		logger.Infof("[文件监听服务] 找到文件格式 %s 对应的内容类型: %s", fileFormat, contentType)
 		return contentType
 	}
 
 	// 默认返回二进制流类型
 	defaultType := "application/octet-stream"
-	log.Printf("No specific content type found for %s, using default: %s", fileFormat, defaultType)
+	logger.Infof("[文件监听服务] 未找到文件格式 %s 的特定内容类型，使用默认类型: %s", fileFormat, defaultType)
 	return defaultType
 }
